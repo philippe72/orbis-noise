@@ -2,7 +2,7 @@
 title: Python tooling for 6.4 GB Orbis PBF processing
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: research-agent (running)
 blocked-by: []
 ---
 

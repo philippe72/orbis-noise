@@ -2,7 +2,7 @@
 title: Do Orbis identifiers survive across releases?
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: research-agent (running)
 blocked-by: []
 ---
 
