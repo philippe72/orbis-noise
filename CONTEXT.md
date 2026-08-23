@@ -37,6 +37,27 @@ A change between two map versions that disappears in the canonical model: the so
 ### Real change
 A change between two map versions that survives into the canonical model diff: the modeled reality itself differs.
 
+### Canonical feature
+The unit of the canonical model for any feature class: one real-world thing with an identity, a geometry, and attribution. Feature classes share this shape and differ only in parameters — geometry type, identity key, tolerances. The merged road is the canonical feature of the road network.
+
+### Attribution
+The tags of a feature that describe the modeled reality, excluding identity tags (identifiers), housekeeping, and metadata. Only attribution participates in canonical-model comparison; which tags count as attribution is decided per class. Excluding a tag is verdict-setting — every change to an excluded tag is noise by construction — so exclusion is always an explicit per-tag decision, and an unclassified tag counts as attribution (fail-visible) until ruled out.
+
+### Label/outline twin
+One real-world thing stored as two elements — a label node carrying the attribution and an outline area carrying the geometry — linked by an `is_same` relation and a shared identifier. Canonically a single feature: the outline's geometry with the label's attribution.
+
+### Chunked tag
+A logical tag value split across `key#N#` tags at byte boundaries. The canonical model joins chunks in order into one value, so re-chunking between map versions is noise; edits inside the joined value remain visible.
+
+### Canonical list value
+A joined multi-valued tag treated as an unordered set of entries, so re-ordering is noise. Tags whose entry order is meaningful are exempted via a per-tag override (none known yet).
+
+### Dissolved region
+The union of touching polygons of one class with identical attribution, taken as a single canonical feature. Where a class uses dissolved regions, re-tiling the same region is noise — the polygon analog of sectioning.
+
+### Render area
+A cartographic area shape (display-layer, typically identifier-less), e.g. a parking-lot outline. Modeled as a canonical feature whose identity comes from matching rather than an identifier.
+
 ### Element change
 One row of the literal PBF diff between baseline and target: a single way, node, or relation that was created, deleted, or modified. The unit of raw churn.
 
