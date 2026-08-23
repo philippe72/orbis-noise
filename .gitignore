@@ -1,3 +1,6 @@
 data/
 __pycache__/
 .venv/
+.tools-osmium/
+.claude/settings.local.json
+.claude/worktrees/
