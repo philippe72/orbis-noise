@@ -72,7 +72,40 @@ Example joins with attribution diffs (lat, lon → paste in a map):
 - failures: **0**
 - zero-length constituent ways (span carries no interval): **0**
 
-## 5. Example merged roads
+## 5. Way-relative canonicalization (#15)
+Semantics established empirically: `gradient:linear`/`curvature:linear` offsets
+are **cm along the way** (first 0, last = way length; `a-b#null` = no data);
+values are continuous across joins in travel direction and **negate on
+reversal** (opposing joins: median |Δ| = 0 flipped vs 6 unflipped).
+`house_numbers:range` is `from|to|scheme|` with from/to in way direction;
+adjacent ranges are step-contiguous (2 for odd/even, 1 otherwise).
+
+Seam verdicts (each seam = one bivalent join crossed by a run):
+- `curvature:linear` — continuous: **5,495**
+- `curvature:linear` — discontinuity: **8**
+- `curvature:linear` — extent boundary: **1**
+- `gradient:linear` — continuous: **21,536**
+- `gradient:linear` — discontinuity: **3**
+- `gradient:linear` — extent boundary: **806**
+- `gradient:linear` — mixed pt/null seam: **1**
+- `range` — extent boundary: **19,109**
+- `range` — merged: **1,284**
+- `range` — not contiguous: **23**
+- discontinuity sizes: median 6, p90 123, max 127
+- range non-contiguity reasons: {'direction conflict': 4, 'scheme change': 5, 'gap': 1, 'non-numeric': 13}
+
+Join-level rollup of the 'only way-relative tag values differ' category:
+- reconcile in canonical form (pure sectioning artifact, confirmed): **21,406** (99.9%)
+- do not reconcile (visible in canonical diff): **12**
+- => **23,728/34,199** joins (69.4%) are now pure sectioning artifacts (identical + meta-only + reconciled way-relative)
+
+Canonical round-trip (sliced run functions -> original per-way value strings):
+- exact: **53,285**, failures: **0**
+(house-number range round-trip: interior cut numbers are sectioning-dependent
+by construction and retained as per-part bookkeeping, not derived from the
+canonical merged range.)
+
+## 6. Example merged roads
 
 ### 21 ways, 565 m, starts at (52.19487, 5.43275)
 ways: [7657815869, 7658920650, 7636518692, 7633387639, 7603242772, 7613467519, 834888732, 1272319024, 1271114443, 875132036, 7621480234, 7610297944, 7622030417, 7650914365, 481615719, 7608663362, 7635102550, 7615926429, 7650973266, 7638744851, 7716993248]
@@ -106,3 +139,6 @@ ways: [7066171986, 7436313333, 7608072342, 7611421724, 7623094255, 7616733236, 7
 - `lanes`: [0–27m]='3' | [27–50m]='2'
 - `lanes:backward`: [0–27m]='2' | [27–50m]='1'
 - `layer`: [328–354m]='1' | [848–894m]='1'
+
+## 7. Visual examples
+Before/after geometry + attribution: `prototypes/output/bivalent_merge_examples.html`

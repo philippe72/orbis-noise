@@ -248,7 +248,8 @@ for chain in merged_roads:
 # ---------------- linear referencing ----------------
 
 class MergedRoad:
-    __slots__ = ("chain", "spans", "length", "linrefs", "flip_warnings")
+    __slots__ = ("chain", "spans", "length", "linrefs", "flip_warnings",
+                 "linfuncs", "ranges", "lists")
 
 def build_linear(chain):
     mr = MergedRoad()
@@ -328,6 +329,296 @@ for mr in mrs:
                 rt_fail_examples.append((wid, dict(list(miss.items())[:4]),
                                          dict(list(extra.items())[:4])))
 
+# ---------------- way-relative canonicalization (#15) ----------------
+# gradient:linear / curvature:linear: value = `off#val;...` with cm offsets
+# along the way (first 0, last == way length in cm) and `a-b#null` no-data
+# ranges. Empirics (join continuity): values are continuous across joins in
+# travel direction and NEGATE when the way is traversed backwards.
+# house_numbers:range:{left,right}: `from|to|scheme|`, from/to in way
+# direction; adjacent same-scheme ranges are step-contiguous (2 for odd/even,
+# 1 otherwise). Canonical form: per merged road, linear functions re-based
+# into merged-road cm space and contiguous ranges merged.
+
+LINFUNC_KEYS = ("gradient:linear", "curvature:linear")
+RANGE_KEYS = ("house_numbers:range:left", "house_numbers:range:right")
+LIST_KEYS = ("house_numbers:list:left", "house_numbers:list:right")
+
+def parse_linvalue(v):
+    """-> [(kind, start, end, val)]; kind 'pt' (end None) or 'rng'; val None = null."""
+    entries = []
+    for part in v.split(";"):
+        o, val = part.split("#")
+        val = None if val == "null" else int(val)
+        if "-" in o:
+            a, b = o.split("-", 1)
+            entries.append(("rng", int(a), int(b), val))
+        else:
+            entries.append(("pt", int(o), None, val))
+    return entries
+
+def fmt_linvalue(entries):
+    return ";".join(
+        (f"{a}-{b}#" if k == "rng" else f"{a}#") + ("null" if v is None else str(v))
+        for k, a, b, v in entries)
+
+def entry_end(e):
+    return e[2] if e[0] == "rng" else e[1]
+
+def linvalue_ok(v):
+    try:
+        es = parse_linvalue(v)
+    except Exception:
+        return None
+    if fmt_linvalue(es) != v or es[0][1] != 0:
+        return None
+    pos = 0
+    for e in es:
+        if e[1] < pos:
+            return None
+        pos = entry_end(e)
+    return es
+
+def mirror_linvalue(entries, length_cm):
+    out = []
+    for k, a, b, v in reversed(entries):
+        nv = None if v is None else -v
+        if k == "rng":
+            out.append(("rng", length_cm - b, length_cm - a, nv))
+        else:
+            out.append(("pt", length_cm - a, None, nv))
+    return out
+
+def swap_lr(key):
+    if ":left" in key:
+        return key.replace(":left", ":right")
+    return key.replace(":right", ":left")
+
+dirty_values = collections.Counter()  # raw strings that don't parse/format-identity
+
+def way_linfunc(wid, rev, key):
+    """Way's linear-function value in merged-road direction, or None."""
+    v = ways[wid][0].get(key)
+    if v is None:
+        return None
+    es = linvalue_ok(v)
+    if es is None:
+        dirty_values[key] += 1
+        return None
+    L = entry_end(es[-1])
+    return (mirror_linvalue(es, L) if rev else es), L
+
+def way_range(wid, rev, nkey):
+    """(frm, to, scheme, extra) in merged-road direction for normalized key nkey."""
+    v = ways[wid][0].get(swap_lr(nkey) if rev else nkey)
+    if v is None:
+        return None
+    f = v.split("|")
+    if len(f) != 4:
+        dirty_values[nkey] += 1
+        return None
+    frm, to, scheme, extra = f
+    if rev:
+        frm, to = to, frm
+    return frm, to, scheme, extra
+
+# --- build canonical runs per merged road, classifying every seam ---
+
+seam_verdicts = collections.Counter()          # (key-type, verdict) counts
+jump_sizes = []                                # gradient/curvature |Δ| at discontinuous seams
+seam_by_joinnode = collections.defaultdict(set)  # node -> {verdicts at that join}
+range_fail_reasons = collections.Counter()
+
+def seam_node(mr, i):
+    """Shared node between chain[i] and chain[i+1]."""
+    wid, rev = mr.chain[i]
+    refs = ways[wid][1]
+    return refs[0] if rev else refs[-1]
+
+def build_canonical(mr):
+    mr.linfuncs = {}   # key -> [run]; run = {'start_m','spans':[(idx,wid,rev,Lcm)],'entries':[...]}
+    mr.ranges = {}     # nkey -> [chain]; chain = {'spans':[idx..],'frm','to','scheme','parts':[(idx,frm,to)]}
+    mr.lists = {}      # nkey -> [(idx, value)]
+    n = len(mr.spans)
+    for key in LINFUNC_KEYS:
+        runs, cur, base = [], None, 0
+        for i, (wid, rev, span) in enumerate(mr.spans):
+            wf = way_linfunc(wid, rev, key)
+            if wf is None:
+                if cur:  # run ends: one-sided seam, extent is preserved canonically
+                    runs.append(cur)
+                    cur = None
+                    seam_verdicts[(key, "extent boundary")] += 1
+                    seam_by_joinnode[seam_node(mr, i - 1)].add("ok")
+                continue
+            es, L = wf
+            if cur is None:
+                cur = {"start_m": span[0], "spans": [], "entries": [], "cm": 0}
+                base = 0
+                if i > 0:  # run starts after a tag-less way: one-sided seam
+                    seam_verdicts[(key, "extent boundary")] += 1
+                    seam_by_joinnode[seam_node(mr, i - 1)].add("ok")
+            else:
+                base = cur["cm"]
+                # classify + stitch the seam
+                first = es[0]
+                last = cur["entries"][-1]
+                node = seam_node(mr, i - 1)
+                if last[0] == "pt" and first[0] == "pt" and last[1] == base + first[1] \
+                        and last[3] is not None and first[3] is not None:
+                    if last[3] == first[3]:
+                        seam_verdicts[(key, "continuous")] += 1
+                        seam_by_joinnode[node].add("ok")
+                        es = es[1:]  # dedupe the shared boundary point
+                    else:
+                        seam_verdicts[(key, "discontinuity")] += 1
+                        jump_sizes.append(abs(last[3] - first[3]))
+                        seam_by_joinnode[node].add("jump")
+                elif last[0] == "rng" and last[3] is None and first[0] == "rng" and first[3] is None:
+                    seam_verdicts[(key, "null-adjacent")] += 1
+                    seam_by_joinnode[node].add("ok")
+                    cur["entries"][-1] = ("rng", last[1], base + first[2], None)
+                    es = es[1:]
+                else:
+                    seam_verdicts[(key, "mixed pt/null seam")] += 1
+                    seam_by_joinnode[node].add("ok")
+            cur["spans"].append((i, wid, rev, L))
+            cur["entries"].extend(
+                ("rng", base + a, base + b, v) if k == "rng" else ("pt", base + a, None, v)
+                for k, a, b, v in es)
+            cur["cm"] += L
+        if cur:
+            runs.append(cur)
+        if runs:
+            mr.linfuncs[key] = runs
+    for nkey in RANGE_KEYS:
+        chains, cur = [], None
+        for i, (wid, rev, span) in enumerate(mr.spans):
+            r = way_range(wid, rev, nkey)
+            if r is None:
+                if cur:  # one-sided seam: extent preserved
+                    chains.append(cur)
+                    cur = None
+                    seam_verdicts[("range", "extent boundary")] += 1
+                    seam_by_joinnode[seam_node(mr, i - 1)].add("ok")
+                continue
+            if cur is None and i > 0 and \
+                    way_range(mr.spans[i - 1][0], mr.spans[i - 1][1], nkey) is None:
+                seam_verdicts[("range", "extent boundary")] += 1
+                seam_by_joinnode[seam_node(mr, i - 1)].add("ok")
+            frm, to, scheme, extra = r
+            if cur is not None:
+                node = seam_node(mr, i - 1)
+                merged = False
+                try:
+                    pto, nfrm = int(cur["to"]), int(frm)
+                    step = 2 if scheme in ("even", "odd") else 1
+                    d = 1 if nfrm > pto else -1
+                    ok_dir = cur["dir"] in (0, d)
+                    if scheme == cur["scheme"] and abs(nfrm - pto) == step and ok_dir:
+                        merged = True
+                        cur["to"] = to
+                        cur["dir"] = d if d else cur["dir"]
+                        cur["parts"].append((i, frm, to))
+                        seam_verdicts[("range", "merged")] += 1
+                        seam_by_joinnode[node].add("ok")
+                    else:
+                        reason = ("scheme change" if scheme != cur["scheme"]
+                                  else "direction conflict" if not ok_dir
+                                  else f"gap")
+                        range_fail_reasons[reason] += 1
+                except ValueError:
+                    range_fail_reasons["non-numeric"] += 1
+                if not merged:
+                    seam_verdicts[("range", "not contiguous")] += 1
+                    seam_by_joinnode[node].add("range-break")
+                    chains.append(cur)
+                    cur = None
+            if cur is None:
+                try:
+                    d = (1 if int(to) > int(frm) else -1 if int(to) < int(frm) else 0)
+                except ValueError:
+                    d = 0
+                cur = {"frm": frm, "to": to, "scheme": scheme, "dir": d,
+                       "parts": [(i, frm, to)], "start_idx": i}
+        if cur:
+            chains.append(cur)
+        if chains:
+            mr.ranges[nkey] = chains
+    for nkey in LIST_KEYS:
+        # canonical: ordered union along the road — invariant under any re-sectioning,
+        # so every seam involving a list value reconciles.
+        has = [ways[wid][0].get(swap_lr(nkey) if rev else nkey)
+               for wid, rev, _ in mr.spans]
+        vals = [(i, v) for i, v in enumerate(has) if v is not None]
+        for i in range(len(mr.spans) - 1):
+            if has[i] is not None or has[i + 1] is not None:
+                seam_by_joinnode[seam_node(mr, i)].add("ok")
+        if vals:
+            mr.lists[nkey] = vals
+
+print("building way-relative canonical forms ...", flush=True)
+for mr in mrs:
+    build_canonical(mr)
+
+# --- canonical round-trip: slice each run back into per-way value strings ---
+
+def slice_run(entries, s, e):
+    out = []
+    for k, a, b, v in entries:
+        if k == "pt":
+            if s <= a <= e:
+                out.append((k, a, b, v))
+        elif a < e and b > s:
+            out.append((k, max(a, s), min(b, e), v))
+    # boundary points shared with the neighboring way:
+    if len(out) >= 2 and out[0][0] == "pt" == out[1][0] and out[0][1] == s == out[1][1]:
+        out = out[1:]   # duplicate pt at start seam: the later one is ours
+    if len(out) >= 2 and out[-1][0] == "pt" == out[-2][0] and out[-1][1] == e == out[-2][1]:
+        out = out[:-1]  # duplicate pt at end seam: the earlier one is ours
+    if out and out[0][0] == "pt" and out[0][1] == s and any(
+            k == "rng" and a == s for k, a, b, v in out[1:]):
+        out = out[1:]   # pt at s belongs to the previous way (we start with a null range)
+    if len(out) >= 2 and out[-1][0] == "pt" and out[-1][1] == e and any(
+            k == "rng" and b == e for k, a, b, v in out[:-1]):
+        out = out[:-1]  # pt at e belongs to the next way (we end with a null range)
+    return out
+
+crt_pass = crt_fail = 0
+crt_fail_examples = []
+for mr in mrs:
+    for key, runs in mr.linfuncs.items():
+        for run in runs:
+            cm = 0
+            for idx, wid, rev, L in run["spans"]:
+                local = [(k, a - cm, None if b is None else b - cm, v)
+                         for k, a, b, v in slice_run(run["entries"], cm, cm + L)]
+                if rev:
+                    local = mirror_linvalue(local, L)
+                got = fmt_linvalue(local)
+                want = ways[wid][0][key]
+                if got == want:
+                    crt_pass += 1
+                else:
+                    crt_fail += 1
+                    if len(crt_fail_examples) < 5:
+                        crt_fail_examples.append((wid, key, want, got))
+                cm += L
+
+# --- join-level rollup for the "only way-relative diffs" category ---
+
+wayrel_joins_ok = wayrel_joins_bad = 0
+for node, (wa, wb) in bivalent.items():
+    ta, tb = ways[wa][0], ways[wb][0]
+    diff_keys = {k for k in set(ta) | set(tb) if ta.get(k) != tb.get(k)}
+    attr_diff = {k for k in diff_keys if tag_class(k) == "attribution"}
+    if not attr_diff or not all(is_way_relative(k) for k in attr_diff):
+        continue
+    verdicts = seam_by_joinnode.get(node, set())
+    if verdicts and "jump" not in verdicts and "range-break" not in verdicts:
+        wayrel_joins_ok += 1
+    else:
+        wayrel_joins_bad += 1
+
 # ---------------- report ----------------
 
 n_ways = len(ways)
@@ -395,7 +686,43 @@ add(f"- zero-length constituent ways (span carries no interval): **{rt_zero:,}**
 for wid, miss, extra in rt_fail_examples:
     add(f"- way {wid}: missing/changed {miss} — spurious {extra}")
 
-add("\n## 5. Example merged roads")
+add("\n## 5. Way-relative canonicalization (#15)")
+add("Semantics established empirically: `gradient:linear`/`curvature:linear` offsets")
+add("are **cm along the way** (first 0, last = way length; `a-b#null` = no data);")
+add("values are continuous across joins in travel direction and **negate on")
+add("reversal** (opposing joins: median |Δ| = 0 flipped vs 6 unflipped).")
+add("`house_numbers:range` is `from|to|scheme|` with from/to in way direction;")
+add("adjacent ranges are step-contiguous (2 for odd/even, 1 otherwise).")
+add(f"\nSeam verdicts (each seam = one bivalent join crossed by a run):")
+for (key, verdict), c in sorted(seam_verdicts.items()):
+    add(f"- `{key}` — {verdict}: **{c:,}**")
+if jump_sizes:
+    jump_sizes.sort()
+    add(f"- discontinuity sizes: median {jump_sizes[len(jump_sizes)//2]}, "
+        f"p90 {jump_sizes[int(len(jump_sizes)*0.9)]}, max {jump_sizes[-1]}")
+if range_fail_reasons:
+    add(f"- range non-contiguity reasons: {dict(range_fail_reasons)}")
+if dirty_values:
+    add(f"- values failing parse/format-identity (kept opaque): {dict(dirty_values)}")
+add(f"\nJoin-level rollup of the 'only way-relative tag values differ' category:")
+tot = wayrel_joins_ok + wayrel_joins_bad
+if tot:
+    add(f"- reconcile in canonical form (pure sectioning artifact, confirmed): "
+        f"**{wayrel_joins_ok:,}** ({wayrel_joins_ok/tot*100:.1f}%)")
+    add(f"- do not reconcile (visible in canonical diff): **{wayrel_joins_bad:,}**")
+    pure = join_stats["identical tags"] + \
+        join_stats["identity/meta-only diff (pure sectioning signature)"] + wayrel_joins_ok
+    add(f"- => **{pure:,}/{total:,}** joins ({pure/total*100:.1f}%) are now pure "
+        f"sectioning artifacts (identical + meta-only + reconciled way-relative)")
+add(f"\nCanonical round-trip (sliced run functions -> original per-way value strings):")
+add(f"- exact: **{crt_pass:,}**, failures: **{crt_fail:,}**")
+for wid, key, want, got in crt_fail_examples:
+    add(f"- way {wid} `{key}`: want `{want[:80]}` got `{got[:80]}`")
+add("(house-number range round-trip: interior cut numbers are sectioning-dependent")
+add("by construction and retained as per-part bookkeeping, not derived from the")
+add("canonical merged range.)")
+
+add("\n## 6. Example merged roads")
 for mr in sorted(mrs, key=lambda m: -len(m.chain))[:3]:
     first_refs = ways[mr.chain[0][0]][1]
     p = loc[first_refs[-1] if mr.chain[0][1] else first_refs[0]]
@@ -410,9 +737,235 @@ for mr in sorted(mrs, key=lambda m: -len(m.chain))[:3]:
             add(f"- `{k}`: " + " | ".join(f"[{s:.0f}–{e:.0f}m]={v!r}" for s, e, v in ivs[:6]))
             shown += 1
 
+# ---------------- visual before/after examples (HTML) ----------------
+
+HTML_OUT = "prototypes/output/bivalent_merge_examples.html"
+PALETTE = ["#2563eb", "#dc2626", "#16a34a", "#9333ea", "#ea580c", "#0891b2",
+           "#ca8a04", "#db2777", "#4f46e5", "#65a30d", "#b91c1c", "#0d9488"]
+ACCENT = "#0e7a8a"
+
+def esc(s):
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+def val_color(v):
+    return PALETTE[hash(str(v)) % len(PALETTE)]
+
+def mr_points(mr):
+    """Merged-road node coords in order, plus per-span point index ranges."""
+    pts, spans_ix = [], []
+    for wid, rev, _ in mr.spans:
+        refs = ways[wid][1]
+        seq = list(reversed(refs)) if rev else list(refs)
+        start = len(pts)
+        pts.extend(loc[r] for r in (seq if not pts else seq[1:]))
+        spans_ix.append((max(0, start - 1) if start else 0, len(pts) - 1))
+    return pts, spans_ix
+
+def project(pts, w, h, pad=14):
+    lats = [p[1] for p in pts]; lons = [p[0] for p in pts]
+    clat = math.cos(math.radians(sum(lats) / len(lats)))
+    xs = [p[0] * clat for p in pts]; ys = lats
+    sx = (max(xs) - min(xs)) or 1e-9; sy = (max(ys) - min(ys)) or 1e-9
+    k = min((w - 2 * pad) / sx, (h - 2 * pad) / sy)
+    x0, y1 = min(xs), max(ys)
+    return [((x - x0) * k + pad, (y1 - y) * k + pad) for x, y in zip(xs, ys)]
+
+def svg_path(xy):
+    return "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+
+def geometry_svgs(mr, w=380, h=260):
+    pts, spans_ix = mr_points(mr)
+    xy = project(pts, w, h)
+    before = []
+    for i, ((a, b), (wid, rev, _)) in enumerate(zip(spans_ix, mr.spans)):
+        c = PALETTE[i % len(PALETTE)]
+        before.append(f'<path d="{svg_path(xy[a:b+1])}" fill="none" stroke="{c}" '
+                      f'stroke-width="3.5" stroke-linecap="round"><title>way {wid}'
+                      f'{" (reversed)" if rev else ""}</title></path>')
+    for a, b in spans_ix[:-1]:  # join nodes between constituents
+        x, y = xy[b]
+        before.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="#fff" '
+                      f'stroke="#111" stroke-width="1.6"/>')
+    after = [f'<path d="{svg_path(xy)}" fill="none" stroke="{ACCENT}" '
+             f'stroke-width="4" stroke-linecap="round"/>']
+    for x, y in (xy[0], xy[-1]):
+        after.append(f'<rect x="{x-4:.1f}" y="{y-4:.1f}" width="8" height="8" '
+                     f'fill="#111"/>')
+    wrap = lambda body: (f'<svg viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
+                         f'<rect width="{w}" height="{h}" fill="#f8fafc"/>' +
+                         "".join(body) + "</svg>")
+    return wrap(before), wrap(after)
+
+def ribbon(blocks, L, label, width=760, bh=26):
+    """blocks: [(start_m, end_m, text, color)] -> one labelled ribbon row."""
+    k = width / (L or 1)
+    parts = [f'<div class="rl">{esc(label)}</div><svg width="{width}" height="{bh}">']
+    for s, e, txt, c in blocks:
+        x, bw = s * k, max((e - s) * k, 1.5)
+        parts.append(f'<rect x="{x:.1f}" y="2" width="{bw:.1f}" height="{bh-8}" '
+                     f'fill="{c}" fill-opacity="0.75" stroke="#fff" stroke-width="1">'
+                     f'<title>[{s:.0f}-{e:.0f} m] {esc(txt)}</title></rect>')
+        if bw > 34:
+            parts.append(f'<text x="{x+3:.1f}" y="{bh-12}" font-size="10" '
+                         f'fill="#111">{esc(str(txt)[:int(bw/6)])}</text>')
+    parts.append("</svg>")
+    return '<div class="row">' + "".join(parts) + "</div>"
+
+def linfunc_chart(mr, key, width=760, h=110):
+    """Before: raw per-way values placed on the merged axis (reversed ways keep
+    their stored sign/offsets -> visible mismatch). After: normalized run."""
+    segs_before, segs_after = [], []
+    for i, (wid, rev, span) in enumerate(mr.spans):
+        v = ways[wid][0].get(key)
+        es = linvalue_ok(v) if v else None
+        if not es:
+            continue
+        Lcm = entry_end(es[-1])
+        pts = [(span[1] - a / 100 if rev else span[0] + a / 100, val)
+               for k2, a, b, val in es if k2 == "pt" and val is not None]
+        if rev:
+            pts.reverse()
+        if len(pts) >= 2:
+            segs_before.append((PALETTE[i % len(PALETTE)], pts))
+    for run in mr.linfuncs.get(key, []):
+        pts = [(run["start_m"] + a / 100, val) for k2, a, b, val in run["entries"]
+               if k2 == "pt" and val is not None]
+        if len(pts) >= 2:
+            segs_after.append((ACCENT, pts))
+    allv = [v for _, pts in segs_before + segs_after for _, v in pts]
+    if not allv:
+        return ""
+    vmin, vmax = min(allv + [0]), max(allv + [0])
+    rng = (vmax - vmin) or 1
+    kx, pad = width / (mr.length or 1), 6
+    def draw(segs, title):
+        out = [f'<svg width="{width}" height="{h}">'
+               f'<rect width="{width}" height="{h}" fill="#f8fafc"/>']
+        y0 = pad + (vmax - 0) / rng * (h - 2 * pad)
+        out.append(f'<line x1="0" y1="{y0:.1f}" x2="{width}" y2="{y0:.1f}" '
+                   f'stroke="#cbd5e1" stroke-dasharray="3,3"/>')
+        for c, pts in segs:
+            xy = [(x * kx, pad + (vmax - v) / rng * (h - 2 * pad)) for x, v in pts]
+            out.append(f'<path d="{svg_path(xy)}" fill="none" stroke="{c}" '
+                       f'stroke-width="2"/>')
+        out.append(f'<text x="4" y="12" font-size="11" fill="#475569">{title} '
+                   f'(y: {vmin}..{vmax})</text></svg>')
+        return "".join(out)
+    return ('<div class="pair"><div>' + draw(segs_before, "before: raw per-way values") +
+            "</div><div>" + draw(segs_after, "after: one normalized function") +
+            "</div></div>")
+
+def example_html(mr, title, note):
+    gb, ga = geometry_svgs(mr)
+    out = [f"<section><h2>{esc(title)}</h2><p>{esc(note)}</p>",
+           f"<p class='meta'>{len(mr.chain)} ways, {mr.length:.0f} m, "
+           f"{sum(1 for _, r, _ in mr.spans if r)} stored reversed. Ways: "
+           f"{', '.join(str(w) for w, _ in mr.chain)}</p>",
+           "<div class='pair'><div><h3>Before: "
+           f"{len(mr.chain)} separate ways</h3>{gb}</div>",
+           f"<div><h3>After: one merged road</h3>{ga}</div></div>"]
+    # attribution ribbons: before (per-way blocks) vs after (merged intervals)
+    keys = [k for k in sorted(mr.linrefs)
+            if tag_class(k) == "attribution" and not is_way_relative(k)
+            and len(mr.linrefs[k]) > 1][:5]
+    if keys:
+        out.append("<h3>Attribution — before: one value per way</h3>")
+        for k in keys:
+            blocks = []
+            for wid, rev, (s, e) in mr.spans:
+                v = ways[wid][0].get(k, "—")
+                blocks.append((s, e, v, val_color(v) if v != "—" else "#e2e8f0"))
+            out.append(ribbon(blocks, mr.length, k))
+        out.append("<h3>Attribution — after: linear references on the merged road</h3>")
+        for k in keys:
+            blocks = [(s, e, v, val_color(v)) for s, e, v in mr.linrefs[k]]
+            out.append(ribbon(blocks, mr.length, k))
+    for key in LINFUNC_KEYS:
+        chart = linfunc_chart(mr, key)
+        if chart and mr.linfuncs.get(key):
+            out.append(f"<h3><code>{key}</code> — re-based into merged-road space</h3>")
+            out.append(chart)
+    for nkey, chains in sorted(mr.ranges.items()):
+        if not any(len(c["parts"]) > 1 for c in chains):
+            continue
+        out.append(f"<h3><code>{esc(nkey)}</code> — contiguous ranges merged</h3>")
+        blocks = [(mr.spans[i][2][0], mr.spans[i][2][1], f"{f}→{t}",
+                   val_color(ci)) for ci, c in enumerate(chains)
+                  for i, f, t in c["parts"]]
+        out.append(ribbon(blocks, mr.length, "before (per way)"))
+        blocks = [(mr.spans[c["parts"][0][0]][2][0], mr.spans[c["parts"][-1][0]][2][1],
+                   f"{c['frm']}→{c['to']} {c['scheme']}", val_color(ci))
+                  for ci, c in enumerate(chains)]
+        out.append(ribbon(blocks, mr.length, "after (merged)"))
+    out.append("</section>")
+    return "".join(out)
+
+def pick_examples():
+    ex, used = [], set()
+    def take(keyfn, title, note):
+        m = max((x for x in mrs if id(x) not in used), key=keyfn)
+        used.add(id(m))
+        ex.append((m, title, note))
+    def grad_score(m):
+        runs = m.linfuncs.get("gradient:linear", [])
+        return max((len(r["spans"]) for r in runs), default=0) + \
+            2 * any(rev for _, rev, _ in m.spans)
+    take(grad_score,
+         "Gradient re-basing across a long chain",
+         "Before: each way stores gradient with its own cm offsets and its own "
+         "direction (reversed ways carry negated values — visible as mirrored "
+         "segments). After: one continuous function over the merged road.")
+    def range_score(m):
+        return max((len(c["parts"]) for ch in m.ranges.values() for c in ch), default=0)
+    take(range_score,
+         "House-number range merging",
+         "Adjacent from|to ranges with the same scheme are step-contiguous and "
+         "merge into one canonical range; the split positions vanish.")
+    take(lambda m: len(m.chain),
+         "Heaviest sectioning in the clip",
+         "The most-sectioned merged road: many tiny ways collapse into one "
+         "road whose partial attribution becomes offset intervals.")
+    def var_score(m):
+        return sum(1 for k in ("name", "lanes", "bridge", "layer", "maxspeed", "oneway")
+                   if len(m.linrefs.get(k, [])) > 1)
+    take(var_score,
+         "Attribution variation carried by linear references",
+         "Name/lanes/bridge/layer change mid-road; sectioning carried this "
+         "before, offset intervals carry it after.")
+    return ex
+
+html = ["""<meta charset="utf-8">
+<title>Bivalent merge — before/after examples</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:840px;margin:24px auto;padding:0 16px;color:#0f172a}
+h1{font-size:1.4em} h2{font-size:1.15em;margin-top:2em;border-top:2px solid #e2e8f0;padding-top:1em}
+h3{font-size:.95em;color:#334155;margin:1.2em 0 .4em}
+p{line-height:1.5} .meta{font-size:.8em;color:#64748b;word-break:break-all}
+.pair{display:flex;gap:16px;flex-wrap:wrap} .pair>div{flex:1;min-width:340px}
+.row{display:flex;align-items:center;gap:8px;margin:2px 0}
+.rl{width:190px;font-size:.75em;font-family:monospace;text-align:right;color:#334155}
+code{background:#f1f5f9;padding:1px 4px;border-radius:3px}
+svg{display:block}
+</style>
+<h1>Bivalent merge + linear referencing — before/after examples</h1>
+<p><b>Question (issues #8, #15):</b> does merging Orbis road ways across bivalent
+nodes, with tags re-expressed as linear references and way-relative values
+re-based into merged-road space, preserve all information while erasing
+sectioning? Each example shows the same road <b>before</b> (as stored: many ways,
+one value per way) and <b>after</b> (canonical: one merged road, offset-based
+attribution). Circles = bivalent join nodes erased by the merge; squares = real
+endpoints (junctions/dead ends). Hover any block for exact values.</p>
+<p class="meta">Clip: """ + esc(CLIP) + """ — generated by prototypes/bivalent_merge_prototype.py (throwaway prototype)</p>"""]
+for m, t, n in pick_examples():
+    html.append(example_html(m, t, n))
+
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
+with open(HTML_OUT, "w", encoding="utf-8") as f:
+    f.write("\n".join(html) + "\n")
+add(f"\n## 7. Visual examples\nBefore/after geometry + attribution: `{HTML_OUT}`")
+
 with open(OUT, "w", encoding="utf-8") as f:
     f.write("\n".join(lines) + "\n")
 
 print("\n".join(lines[:40]))
-print(f"\nfull report: {OUT}")
+print(f"\nfull report: {OUT}\nvisual examples: {HTML_OUT}")
