@@ -49,6 +49,11 @@ def tag_class(k: str) -> str:
 
 # --- direction handling for reversed constituent ways ---
 
+def swap_lr(key):
+    if ":left" in key:
+        return key.replace(":left", ":right")
+    return key.replace(":right", ":left")
+
 def flip_key_value(k: str, v: str):
     """Re-express a tag of a reversed way in the merged road's direction.
     Returns (k, v, flipped_ok). Symmetric: applying twice is identity."""
@@ -59,7 +64,12 @@ def flip_key_value(k: str, v: str):
             return k, "yes", True
         return k, v, True  # no / other: direction-neutral
     if is_way_relative(k):
-        return k, v, False  # offsets/signs are way-relative; needs re-basing, unsolved
+        return k, v, False  # offsets/signs are way-relative; re-based separately
+    if k in ("house_numbers:range:left", "house_numbers:range:right"):
+        f = v.split("|")
+        if len(f) == 4:
+            v = "|".join((f[1], f[0], f[2], f[3]))  # from/to follow way direction
+        return swap_lr(k), v, True
     parts = k.split(":")
     swap = {"forward": "backward", "backward": "forward", "left": "right", "right": "left"}
     if any(p in swap for p in parts):
@@ -69,10 +79,12 @@ def flip_key_value(k: str, v: str):
         return k, "|".join(reversed(v.split("|"))), True
     return k, v, True
 
-# tags whose VALUE embeds its own along-the-way referencing (offsets, ranges,
-# ordered aggregates). Sectioning rewrites these values even when reality is
-# unchanged, and reversal would need value re-basing — flagged, not solved.
-WAY_RELATIVE_PREFIXES = ("gradient:linear", "curvature:linear", "house_numbers:")
+# tags whose VALUE embeds its own along-the-way offset referencing. Sectioning
+# rewrites these values even when reality is unchanged; the canonical model
+# re-bases them into merged-road offset space. house_numbers:range is NOT here:
+# its from/to blocks carry real spatial placement, so the canonical model keeps
+# them as adjacent linear-referenced blocks (only direction-normalized).
+WAY_RELATIVE_PREFIXES = ("gradient:linear", "curvature:linear")
 
 def is_way_relative(k: str) -> bool:
     return k.startswith(WAY_RELATIVE_PREFIXES) or \
@@ -249,7 +261,7 @@ for chain in merged_roads:
 
 class MergedRoad:
     __slots__ = ("chain", "spans", "length", "linrefs", "flip_warnings",
-                 "linfuncs", "ranges", "lists")
+                 "linfuncs")
 
 def build_linear(chain):
     mr = MergedRoad()
@@ -334,14 +346,13 @@ for mr in mrs:
 # along the way (first 0, last == way length in cm) and `a-b#null` no-data
 # ranges. Empirics (join continuity): values are continuous across joins in
 # travel direction and NEGATE when the way is traversed backwards.
-# house_numbers:range:{left,right}: `from|to|scheme|`, from/to in way
-# direction; adjacent same-scheme ranges are step-contiguous (2 for odd/even,
-# 1 otherwise). Canonical form: per merged road, linear functions re-based
-# into merged-road cm space and contiguous ranges merged.
+# Canonical form: per merged road, linear functions re-based into merged-road
+# cm space. house_numbers:range:{left,right} (`from|to|scheme|`, from/to in way
+# direction) are deliberately NOT merged: each block carries real spatial
+# placement, so they stay adjacent linear-referenced blocks, only
+# direction-normalized (left/right key swap + from/to swap on reversal).
 
 LINFUNC_KEYS = ("gradient:linear", "curvature:linear")
-RANGE_KEYS = ("house_numbers:range:left", "house_numbers:range:right")
-LIST_KEYS = ("house_numbers:list:left", "house_numbers:list:right")
 
 def parse_linvalue(v):
     """-> [(kind, start, end, val)]; kind 'pt' (end None) or 'rng'; val None = null."""
@@ -388,11 +399,6 @@ def mirror_linvalue(entries, length_cm):
             out.append(("pt", length_cm - a, None, nv))
     return out
 
-def swap_lr(key):
-    if ":left" in key:
-        return key.replace(":left", ":right")
-    return key.replace(":right", ":left")
-
 dirty_values = collections.Counter()  # raw strings that don't parse/format-identity
 
 def way_linfunc(wid, rev, key):
@@ -407,26 +413,11 @@ def way_linfunc(wid, rev, key):
     L = entry_end(es[-1])
     return (mirror_linvalue(es, L) if rev else es), L
 
-def way_range(wid, rev, nkey):
-    """(frm, to, scheme, extra) in merged-road direction for normalized key nkey."""
-    v = ways[wid][0].get(swap_lr(nkey) if rev else nkey)
-    if v is None:
-        return None
-    f = v.split("|")
-    if len(f) != 4:
-        dirty_values[nkey] += 1
-        return None
-    frm, to, scheme, extra = f
-    if rev:
-        frm, to = to, frm
-    return frm, to, scheme, extra
-
 # --- build canonical runs per merged road, classifying every seam ---
 
 seam_verdicts = collections.Counter()          # (key-type, verdict) counts
 jump_sizes = []                                # gradient/curvature |Δ| at discontinuous seams
 seam_by_joinnode = collections.defaultdict(set)  # node -> {verdicts at that join}
-range_fail_reasons = collections.Counter()
 
 def seam_node(mr, i):
     """Shared node between chain[i] and chain[i+1]."""
@@ -436,8 +427,6 @@ def seam_node(mr, i):
 
 def build_canonical(mr):
     mr.linfuncs = {}   # key -> [run]; run = {'start_m','spans':[(idx,wid,rev,Lcm)],'entries':[...]}
-    mr.ranges = {}     # nkey -> [chain]; chain = {'spans':[idx..],'frm','to','scheme','parts':[(idx,frm,to)]}
-    mr.lists = {}      # nkey -> [(idx, value)]
     n = len(mr.spans)
     for key in LINFUNC_KEYS:
         runs, cur, base = [], None, 0
@@ -490,71 +479,6 @@ def build_canonical(mr):
             runs.append(cur)
         if runs:
             mr.linfuncs[key] = runs
-    for nkey in RANGE_KEYS:
-        chains, cur = [], None
-        for i, (wid, rev, span) in enumerate(mr.spans):
-            r = way_range(wid, rev, nkey)
-            if r is None:
-                if cur:  # one-sided seam: extent preserved
-                    chains.append(cur)
-                    cur = None
-                    seam_verdicts[("range", "extent boundary")] += 1
-                    seam_by_joinnode[seam_node(mr, i - 1)].add("ok")
-                continue
-            if cur is None and i > 0 and \
-                    way_range(mr.spans[i - 1][0], mr.spans[i - 1][1], nkey) is None:
-                seam_verdicts[("range", "extent boundary")] += 1
-                seam_by_joinnode[seam_node(mr, i - 1)].add("ok")
-            frm, to, scheme, extra = r
-            if cur is not None:
-                node = seam_node(mr, i - 1)
-                merged = False
-                try:
-                    pto, nfrm = int(cur["to"]), int(frm)
-                    step = 2 if scheme in ("even", "odd") else 1
-                    d = 1 if nfrm > pto else -1
-                    ok_dir = cur["dir"] in (0, d)
-                    if scheme == cur["scheme"] and abs(nfrm - pto) == step and ok_dir:
-                        merged = True
-                        cur["to"] = to
-                        cur["dir"] = d if d else cur["dir"]
-                        cur["parts"].append((i, frm, to))
-                        seam_verdicts[("range", "merged")] += 1
-                        seam_by_joinnode[node].add("ok")
-                    else:
-                        reason = ("scheme change" if scheme != cur["scheme"]
-                                  else "direction conflict" if not ok_dir
-                                  else f"gap")
-                        range_fail_reasons[reason] += 1
-                except ValueError:
-                    range_fail_reasons["non-numeric"] += 1
-                if not merged:
-                    seam_verdicts[("range", "not contiguous")] += 1
-                    seam_by_joinnode[node].add("range-break")
-                    chains.append(cur)
-                    cur = None
-            if cur is None:
-                try:
-                    d = (1 if int(to) > int(frm) else -1 if int(to) < int(frm) else 0)
-                except ValueError:
-                    d = 0
-                cur = {"frm": frm, "to": to, "scheme": scheme, "dir": d,
-                       "parts": [(i, frm, to)], "start_idx": i}
-        if cur:
-            chains.append(cur)
-        if chains:
-            mr.ranges[nkey] = chains
-    for nkey in LIST_KEYS:
-        # canonical: ordered union along the road — invariant under any re-sectioning,
-        # so every seam involving a list value reconciles.
-        has = [ways[wid][0].get(swap_lr(nkey) if rev else nkey)
-               for wid, rev, _ in mr.spans]
-        vals = [(i, v) for i, v in enumerate(has) if v is not None]
-        for i in range(len(mr.spans) - 1):
-            if has[i] is not None or has[i + 1] is not None:
-                seam_by_joinnode[seam_node(mr, i)].add("ok")
-        if vals:
-            mr.lists[nkey] = vals
 
 print("building way-relative canonical forms ...", flush=True)
 for mr in mrs:
@@ -652,11 +576,12 @@ total = sum(v for k, v in join_stats.items() if not k.startswith("~"))
 for k, v in join_stats.most_common():
     if not k.startswith("~"):
         add(f"- {k}: **{v:,}** ({v/total*100:.1f}%)")
-add("\nWay-relative tags (`gradient:linear`, `curvature:linear`, `house_numbers:*`)")
-add("embed their own along-the-way offsets/ranges, so sectioning rewrites their")
-add("values without any real-world change. Plain linear referencing does NOT")
-add("canonicalize them — they need value re-basing into merged-road offset space")
-add("(and direction normalization: gradient sign flips on reversal).")
+add("\nWay-relative tags (`gradient:linear`, `curvature:linear`) embed their own")
+add("along-the-way offsets, so sectioning rewrites their values without any")
+add("real-world change; the canonical model re-bases them into merged-road offset")
+add("space (with sign flip on reversal). `house_numbers:range:*` values are only")
+add("direction-normalized (from/to swap on reversal) and stay adjacent blocks:")
+add("each block's placement is real spatial information, never merged away.")
 add("\nBoundary flavors at joins (overlapping categories):")
 for k, v in sorted(join_stats.items()):
     if k.startswith("~"):
@@ -691,8 +616,9 @@ add("Semantics established empirically: `gradient:linear`/`curvature:linear` off
 add("are **cm along the way** (first 0, last = way length; `a-b#null` = no data);")
 add("values are continuous across joins in travel direction and **negate on")
 add("reversal** (opposing joins: median |Δ| = 0 flipped vs 6 unflipped).")
-add("`house_numbers:range` is `from|to|scheme|` with from/to in way direction;")
-add("adjacent ranges are step-contiguous (2 for odd/even, 1 otherwise).")
+add("`house_numbers:range` is `from|to|scheme|` with from/to in way direction —")
+add("direction-normalized but deliberately kept as adjacent blocks (real spatial")
+add("placement), never merged into one range.")
 add(f"\nSeam verdicts (each seam = one bivalent join crossed by a run):")
 for (key, verdict), c in sorted(seam_verdicts.items()):
     add(f"- `{key}` — {verdict}: **{c:,}**")
@@ -700,8 +626,6 @@ if jump_sizes:
     jump_sizes.sort()
     add(f"- discontinuity sizes: median {jump_sizes[len(jump_sizes)//2]}, "
         f"p90 {jump_sizes[int(len(jump_sizes)*0.9)]}, max {jump_sizes[-1]}")
-if range_fail_reasons:
-    add(f"- range non-contiguity reasons: {dict(range_fail_reasons)}")
 if dirty_values:
     add(f"- values failing parse/format-identity (kept opaque): {dict(dirty_values)}")
 add(f"\nJoin-level rollup of the 'only way-relative tag values differ' category:")
@@ -718,9 +642,8 @@ add(f"\nCanonical round-trip (sliced run functions -> original per-way value str
 add(f"- exact: **{crt_pass:,}**, failures: **{crt_fail:,}**")
 for wid, key, want, got in crt_fail_examples:
     add(f"- way {wid} `{key}`: want `{want[:80]}` got `{got[:80]}`")
-add("(house-number range round-trip: interior cut numbers are sectioning-dependent")
-add("by construction and retained as per-part bookkeeping, not derived from the")
-add("canonical merged range.)")
+add("(house-number ranges ride the ordinary tag round-trip in section 4: the")
+add("from/to swap on reversal is a symmetric flip like oneway.)")
 
 add("\n## 6. Example merged roads")
 for mr in sorted(mrs, key=lambda m: -len(m.chain))[:3]:
@@ -885,18 +808,17 @@ def example_html(mr, title, note):
         if chart and mr.linfuncs.get(key):
             out.append(f"<h3><code>{key}</code> — re-based into merged-road space</h3>")
             out.append(chart)
-    for nkey, chains in sorted(mr.ranges.items()):
-        if not any(len(c["parts"]) > 1 for c in chains):
+    for nkey in ("house_numbers:range:left", "house_numbers:range:right"):
+        raw = [(s, e, ways[wid][0].get(nkey if not rev else swap_lr(nkey)))
+               for wid, rev, (s, e) in mr.spans]
+        if sum(1 for _, _, v in raw if v) < 2:
             continue
-        out.append(f"<h3><code>{esc(nkey)}</code> — contiguous ranges merged</h3>")
-        blocks = [(mr.spans[i][2][0], mr.spans[i][2][1], f"{f}→{t}",
-                   val_color(ci)) for ci, c in enumerate(chains)
-                  for i, f, t in c["parts"]]
-        out.append(ribbon(blocks, mr.length, "before (per way)"))
-        blocks = [(mr.spans[c["parts"][0][0]][2][0], mr.spans[c["parts"][-1][0]][2][1],
-                   f"{c['frm']}→{c['to']} {c['scheme']}", val_color(ci))
-                  for ci, c in enumerate(chains)]
-        out.append(ribbon(blocks, mr.length, "after (merged)"))
+        out.append(f"<h3><code>{esc(nkey)}</code> — direction-normalized, kept as "
+                   "adjacent blocks (never merged: placement is real information)</h3>")
+        blocks = [(s, e, v, val_color(v)) for s, e, v in raw if v]
+        out.append(ribbon(blocks, mr.length, "before (raw per way)"))
+        blocks = [(s, e, v, val_color(v)) for s, e, v in mr.linrefs.get(nkey, [])]
+        out.append(ribbon(blocks, mr.length, "after (normalized blocks)"))
     out.append("</section>")
     return "".join(out)
 
@@ -916,11 +838,14 @@ def pick_examples():
          "direction (reversed ways carry negated values — visible as mirrored "
          "segments). After: one continuous function over the merged road.")
     def range_score(m):
-        return max((len(c["parts"]) for ch in m.ranges.values() for c in ch), default=0)
+        return sum(1 for k in ("house_numbers:range:left", "house_numbers:range:right")
+                   for _, _, v in m.linrefs.get(k, []) if v)
     take(range_score,
-         "House-number range merging",
-         "Adjacent from|to ranges with the same scheme are step-contiguous and "
-         "merge into one canonical range; the split positions vanish.")
+         "House-number blocks stay adjacent",
+         "from|to ranges are direction-normalized (from/to follow travel "
+         "direction) but deliberately NOT merged: each block's placement is "
+         "real spatial information, so the blocks sit side by side on the "
+         "merged road.")
     take(lambda m: len(m.chain),
          "Heaviest sectioning in the clip",
          "The most-sectioned merged road: many tiny ways collapse into one "

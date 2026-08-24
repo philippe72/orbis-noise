@@ -13,16 +13,17 @@ topology; tag changes at the join are carried by linear references.
 - chain size distribution (ways per merged road): 1:35,508, 2:8,536, 3:6,425, 4:1,795, 5:706, 6:337, 7:141, 8:80, 9:56, 10:31, 11:16, 12:10, max 21
 
 ## 2. What sits at a topologically-bivalent node
-- only way-relative tag values differ (likely sectioning artifact): **21,418** (62.6%)
-- attribution diff (needs linear referencing): **10,459** (30.6%)
+- attribution diff (needs linear referencing): **29,983** (87.7%)
 - identical tags: **1,943** (5.7%)
+- only way-relative tag values differ (likely sectioning artifact): **1,894** (5.5%)
 - identity/meta-only diff (pure sectioning signature): **379** (1.1%)
 
-Way-relative tags (`gradient:linear`, `curvature:linear`, `house_numbers:*`)
-embed their own along-the-way offsets/ranges, so sectioning rewrites their
-values without any real-world change. Plain linear referencing does NOT
-canonicalize them — they need value re-basing into merged-road offset space
-(and direction normalization: gradient sign flips on reversal).
+Way-relative tags (`gradient:linear`, `curvature:linear`) embed their own
+along-the-way offsets, so sectioning rewrites their values without any
+real-world change; the canonical model re-bases them into merged-road offset
+space (with sign flip on reversal). `house_numbers:range:*` values are only
+direction-normalized (from/to swap on reversal) and stay adjacent blocks:
+each block's placement is real spatial information, never merged away.
 
 Boundary flavors at joins (overlapping categories):
 - bridge boundary: **1,535**
@@ -35,21 +36,21 @@ Boundary flavors at joins (overlapping categories):
 Join nodes carrying their own attribution tags: **4,523** — top keys: [('connector', 3258), ('barrier', 1409), ('supported:barrier', 1409), ('split', 1372), ('highway', 488), ('supported:highway', 488), ('crossing:markings', 465), ('supported:crossing:markings', 465)]
 
 Top attribution keys that differ across a join:
-- `gradient:linear`: 4,825
+- `gradient:linear`: 20,455
+- `house_numbers:range:right`: 10,549
+- `house_numbers:range:left`: 9,868
+- `house_numbers:list:right`: 4,572
+- `curvature:linear`: 4,142
+- `house_numbers:list:left`: 4,035
 - `postal_code:main`: 2,725
 - `postal_code:main:right`: 2,653
 - `postal_code:main:left`: 2,644
-- `curvature:linear`: 2,463
 - `highway`: 1,898
 - `layer`: 1,697
 - `supported:layer`: 1,686
 - `bridge`: 1,535
 - `supported:bridge`: 1,518
 - `zoomlevel_min`: 1,204
-- `maxspeed:motorcar:conditional`: 1,189
-- `navigability`: 1,178
-- `maxspeed:bus:conditional`: 1,142
-- `maxspeed:origin:motorcar:conditional`: 1,106
 
 Example joins with attribution diffs (lat, lon → paste in a map):
 - node 4829523424 (52.13529, 5.30334) ways 359861548/583427014: `access`: 'private' → None; `foot`: 'permissive' → None; `highway`: 'path' → 'footway'; `supported:foot`: 'no' → None
@@ -64,8 +65,8 @@ Example joins with attribution diffs (lat, lon → paste in a map):
 ## 3. Direction handling
 - constituent ways stored reversed relative to merged-road direction: **41,452**
 - flips applied: `oneway` yes↔-1, `forward`↔`backward` and `left`↔`right` key-segment swaps, `|`-list reversal for `:lanes` keys
-- unflippable tags on reversed ways (all way-relative value referencing): **61,810**
-  - top keys: [('gradient:linear', 21064), ('layer_id:house_numbers:range:right', 5397), ('license:house_numbers:range:right', 5397), ('layer_id:house_numbers:range:left', 5396), ('license:house_numbers:range:left', 5396), ('curvature:linear', 4955), ('house_numbers:range:left', 4086), ('house_numbers:range:right', 4048), ('house_numbers:list:right', 1659), ('house_numbers:list:left', 1499)]
+- unflippable tags on reversed ways (all way-relative value referencing): **26,112**
+  - top keys: [('gradient:linear', 21064), ('curvature:linear', 4955), ('gradient:linear#1#', 41), ('gradient:linear#2#', 41), ('gradient:linear#3#', 6), ('gradient:linear#4#', 3), ('gradient:linear#5#', 2)]
 
 ## 4. Round-trip (merged road + linear refs → original way tags)
 - exact reconstructions: **87,876**
@@ -77,8 +78,9 @@ Semantics established empirically: `gradient:linear`/`curvature:linear` offsets
 are **cm along the way** (first 0, last = way length; `a-b#null` = no data);
 values are continuous across joins in travel direction and **negate on
 reversal** (opposing joins: median |Δ| = 0 flipped vs 6 unflipped).
-`house_numbers:range` is `from|to|scheme|` with from/to in way direction;
-adjacent ranges are step-contiguous (2 for odd/even, 1 otherwise).
+`house_numbers:range` is `from|to|scheme|` with from/to in way direction —
+direction-normalized but deliberately kept as adjacent blocks (real spatial
+placement), never merged into one range.
 
 Seam verdicts (each seam = one bivalent join crossed by a run):
 - `curvature:linear` — continuous: **5,495**
@@ -88,22 +90,17 @@ Seam verdicts (each seam = one bivalent join crossed by a run):
 - `gradient:linear` — discontinuity: **3**
 - `gradient:linear` — extent boundary: **806**
 - `gradient:linear` — mixed pt/null seam: **1**
-- `range` — extent boundary: **19,109**
-- `range` — merged: **1,284**
-- `range` — not contiguous: **23**
 - discontinuity sizes: median 6, p90 123, max 127
-- range non-contiguity reasons: {'direction conflict': 4, 'scheme change': 5, 'gap': 1, 'non-numeric': 13}
 
 Join-level rollup of the 'only way-relative tag values differ' category:
-- reconcile in canonical form (pure sectioning artifact, confirmed): **21,406** (99.9%)
-- do not reconcile (visible in canonical diff): **12**
-- => **23,728/34,199** joins (69.4%) are now pure sectioning artifacts (identical + meta-only + reconciled way-relative)
+- reconcile in canonical form (pure sectioning artifact, confirmed): **1,894** (100.0%)
+- do not reconcile (visible in canonical diff): **0**
+- => **4,216/34,199** joins (12.3%) are now pure sectioning artifacts (identical + meta-only + reconciled way-relative)
 
 Canonical round-trip (sliced run functions -> original per-way value strings):
 - exact: **53,285**, failures: **0**
-(house-number range round-trip: interior cut numbers are sectioning-dependent
-by construction and retained as per-part bookkeeping, not derived from the
-canonical merged range.)
+(house-number ranges ride the ordinary tag round-trip in section 4: the
+from/to swap on reversal is a symmetric flip like oneway.)
 
 ## 6. Example merged roads
 
