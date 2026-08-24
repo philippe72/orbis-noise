@@ -513,11 +513,13 @@ rows.append("<h2>Examples per max_dev band</h2>"
             "suggests unchanged topology. Map faded 50% for contrast. "
             "Spread across the band (smallest, ~33%, ~66%, largest). "
             "Click coords to check aerial imagery.</p>")
+ex_no = 0
 for label, count, picks in examples_by_band:
     if not count:
         continue
     rows.append(f"<h3>{html.escape(label)} — {count} pairs</h3><div class='exrow'>")
     for mx, mn, bi, ti, lb, lt in picks:
+        ex_no += 1
         pa, pb = base_roads[bi]["pts"], target_roads[ti]["pts"]
         cx = sum(p[0] for p in pa) / len(pa)
         cy = sum(p[1] for p in pa) / len(pa)
@@ -534,7 +536,7 @@ for label, count, picks in examples_by_band:
             + svg_overlay(pa, pb)
             + osm_snapshot(pair_layers, pa + pb)
             + osm_snapshot(ctx_layers, ctx_bbox)
-            + f"</div><div class='cap'>max {mx:.2f} m · mean {mn:.2f} m · len {lb:.0f}→{lt:.0f} m · "
+            + f"</div><div class='cap'><b>Example {ex_no}</b> · max {mx:.2f} m · mean {mn:.2f} m · len {lb:.0f}→{lt:.0f} m · "
             f"{base_roads[bi]['nways']}→{target_roads[ti]['nways']} ways · "
             f"nbrs {len(nbrs_b)}→{len(nbrs_t)}<br>"
             f"<a href='https://www.google.com/maps/search/?api=1&query={cy:.6f},{cx:.6f}' target='_blank'>{cy:.5f}, {cx:.5f}</a>"
