@@ -19,13 +19,18 @@ Run:  .venv-research/Scripts/python.exe prototypes/geometry_tolerance_prototype.
 Output: stdout summary + prototypes/output/geometry_tolerance_report.html
 """
 
+import base64
 import collections
 import html
+import io
 import math
 import os
 import sys
+import time
 
 import osmium
+import requests
+from PIL import Image
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -310,12 +315,84 @@ def svg_overlay(pa, pb, width=460, height=300):
     bar_px = bar_m * scale
     return (
         f'<svg viewBox="0 0 {width} {height}" style="background:#fafafa;border:1px solid #ddd">'
-        f'<path d="{path(pa)}" fill="none" stroke="#888" stroke-width="4" stroke-linecap="round" opacity="0.8"/>'
+        f'<path d="{path(pa)}" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" opacity="0.85"/>'
         f'<path d="{path(pb)}" fill="none" stroke="#d33" stroke-width="1.8" stroke-linecap="round"/>'
         f'<line x1="{pad}" y1="{height-6}" x2="{pad+bar_px:.1f}" y2="{height-6}" stroke="#333" stroke-width="2"/>'
         f'<text x="{pad}" y="{height-10}" font-size="10" fill="#333">{bar_m} m</text>'
         "</svg>"
     )
+
+
+# ---------------- OSM static screenshots (slippy tiles, embedded as data URIs) ----------------
+
+TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+TILE_HEADERS = {"User-Agent": "orbis-noise-prototype/0.1 (geometry tolerance report, issue #9)"}
+_tile_cache = {}
+
+
+def _fetch_tile(z, x, y):
+    key = (z, x, y)
+    if key not in _tile_cache:
+        r = requests.get(TILE_URL.format(z=z, x=x, y=y), headers=TILE_HEADERS, timeout=20)
+        r.raise_for_status()
+        _tile_cache[key] = Image.open(io.BytesIO(r.content)).convert("RGB")
+        time.sleep(0.1)
+    return _tile_cache[key]
+
+
+def _merc_px(lon, lat, z):
+    """lon/lat -> global pixel coords at zoom z (256px tiles)."""
+    n = 256 * (2 ** z)
+    x = (lon + 180.0) / 360.0 * n
+    lat_r = math.radians(lat)
+    y = (1.0 - math.asinh(math.tan(lat_r)) / math.pi) / 2.0 * n
+    return x, y
+
+
+def osm_snapshot(pa, pb, width=460, height=300):
+    """<img> of the current OSM map cropped to the same area as the SVG
+    overlay (plus padding), embedded as a base64 data URI."""
+    lons = [p[0] for p in pa + pb]
+    lats = [p[1] for p in pa + pb]
+    lon0, lon1 = min(lons), max(lons)
+    lat0, lat1 = min(lats), max(lats)
+    pad_lon = max((lon1 - lon0) * 0.15, 0.0003)
+    pad_lat = max((lat1 - lat0) * 0.15, 0.0002)
+    lon0, lon1 = lon0 - pad_lon, lon1 + pad_lon
+    lat0, lat1 = lat0 - pad_lat, lat1 + pad_lat
+
+    z = 19
+    while z > 12:
+        x0, y0 = _merc_px(lon0, lat1, z)
+        x1, y1 = _merc_px(lon1, lat0, z)
+        if x1 - x0 <= width and y1 - y0 <= height:
+            break
+        z -= 1
+    x0, y0 = _merc_px(lon0, lat1, z)
+    x1, y1 = _merc_px(lon1, lat0, z)
+    # expand the crop to exactly width x height, centered on the bbox
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    x0, x1 = cx - width / 2, cx + width / 2
+    y0, y1 = cy - height / 2, cy + height / 2
+
+    try:
+        tx0, tx1 = int(x0 // 256), int(x1 // 256)
+        ty0, ty1 = int(y0 // 256), int(y1 // 256)
+        stitched = Image.new("RGB", ((tx1 - tx0 + 1) * 256, (ty1 - ty0 + 1) * 256))
+        for tx in range(tx0, tx1 + 1):
+            for ty in range(ty0, ty1 + 1):
+                stitched.paste(_fetch_tile(z, tx, ty), ((tx - tx0) * 256, (ty - ty0) * 256))
+        crop = stitched.crop((int(x0 - tx0 * 256), int(y0 - ty0 * 256),
+                              int(x0 - tx0 * 256) + width, int(y0 - ty0 * 256) + height))
+        buf = io.BytesIO()
+        crop.save(buf, "PNG", optimize=True)
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        return (f'<img src="data:image/png;base64,{b64}" width="{width}" height="{height}" '
+                f'style="border:1px solid #ddd" alt="OSM map z{z}">')
+    except Exception as e:  # keep the report renderable without network
+        return (f'<div style="width:{width}px;height:{height}px;border:1px solid #ddd;'
+                f'display:flex;align-items:center;justify-content:center;color:#999">'
+                f'OSM tiles unavailable: {html.escape(str(e)[:80])}</div>')
 
 
 EX_PER_BAND = 4
@@ -375,8 +452,9 @@ rows.append(hist_svg(bc_max, "max_dev distribution (count per band, log-scaled b
 rows.append(hist_svg(bc_mean, "mean_dev distribution (count per band, log-scaled bars)", "#7a9e5f"))
 
 rows.append("<h2>Examples per max_dev band</h2>"
-            "<p>Gray thick = baseline 26330, red thin = target 26340. Spread across the band "
-            "(smallest, ~33%, ~66%, largest). Click coords to check aerial imagery.</p>")
+            "<p>Blue thick = baseline 26330, red thin = target 26340; right: current OSM map of the "
+            "same area for context. Spread across the band (smallest, ~33%, ~66%, largest). "
+            "Click coords to check aerial imagery.</p>")
 for label, count, picks in examples_by_band:
     if not count:
         continue
@@ -387,9 +465,10 @@ for label, count, picks in examples_by_band:
         cy = sum(p[1] for p in pa) / len(pa)
         g = sorted(base_roads[bi]["gers"])
         rows.append(
-            "<div class='ex'>"
+            "<div class='ex'><div class='side'>"
             + svg_overlay(pa, pb)
-            + f"<div class='cap'>max {mx:.2f} m · mean {mn:.2f} m · len {lb:.0f}→{lt:.0f} m · "
+            + osm_snapshot(pa, pb)
+            + f"</div><div class='cap'>max {mx:.2f} m · mean {mn:.2f} m · len {lb:.0f}→{lt:.0f} m · "
             f"{base_roads[bi]['nways']}→{target_roads[ti]['nways']} ways<br>"
             f"<a href='https://www.google.com/maps/search/?api=1&query={cy:.6f},{cx:.6f}' target='_blank'>{cy:.5f}, {cx:.5f}</a>"
             f" · gers {html.escape(g[0][:16])}…({len(g)})</div></div>"
@@ -400,8 +479,9 @@ page = (
     "<!doctype html><meta charset='utf-8'>"
     "<title>Geometry tolerance prototype (#9)</title>"
     "<style>body{font:14px/1.5 system-ui;margin:24px;max-width:1000px}"
-    ".exrow{display:flex;flex-wrap:wrap;gap:14px}"
-    ".ex{width:462px}.cap{font-size:12px;color:#444;margin-top:2px}"
+    ".exrow{display:flex;flex-wrap:wrap;gap:18px}"
+    ".ex{width:940px}.side{display:flex;gap:12px}.side svg{width:460px;flex:none}"
+    ".cap{font-size:12px;color:#444;margin-top:2px}"
     "code{background:#f0f0f0;padding:1px 4px;border-radius:3px}</style>"
     + "".join(rows)
 )
