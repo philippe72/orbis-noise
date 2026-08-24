@@ -49,6 +49,9 @@ One real-world thing stored as two elements — a label node carrying the attrib
 ### Chunked tag
 A logical tag value split across `key#N#` tags at byte boundaries. The canonical model joins chunks in order into one value, so re-chunking between map versions is noise; edits inside the joined value remain visible.
 
+### Way-relative tag
+A tag whose value embeds its own along-the-way referencing — offsets or ranges measured from the way's start, in the way's direction (e.g. `gradient:linear`, `curvature:linear`, `house_numbers:*`). Sectioning rewrites these values without any real-world change, so the canonical model must re-base them into the merged road's linear reference space (including direction normalization); placing the opaque value in a linear-reference interval is not enough.
+
 ### Canonical list value
 A joined multi-valued tag treated as an unordered set of entries, so re-ordering is noise. Tags whose entry order is meaningful are exempted via a per-tag override (none known yet).
 
