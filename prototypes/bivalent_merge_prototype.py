@@ -648,8 +648,11 @@ add("from/to swap on reversal is a symmetric flip like oneway.)")
 add("\n## 6. Example merged roads")
 for mr in sorted(mrs, key=lambda m: -len(m.chain))[:3]:
     first_refs = ways[mr.chain[0][0]][1]
+    last_refs = ways[mr.chain[-1][0]][1]
     p = loc[first_refs[-1] if mr.chain[0][1] else first_refs[0]]
-    add(f"\n### {len(mr.chain)} ways, {mr.length:.0f} m, starts at ({p[1]:.5f}, {p[0]:.5f})")
+    q = loc[last_refs[0] if mr.chain[-1][1] else last_refs[-1]]
+    add(f"\n### {len(mr.chain)} ways, {mr.length:.0f} m, "
+        f"from ({p[1]:.5f}, {p[0]:.5f}) to ({q[1]:.5f}, {q[0]:.5f})")
     add(f"ways: {[w for w, _ in mr.chain]}")
     shown = 0
     for k in sorted(mr.linrefs):
@@ -707,8 +710,10 @@ def geometry_svgs(mr, w=380, h=260):
                       f'{" (reversed)" if rev else ""}</title></path>')
     for a, b in spans_ix[:-1]:  # join nodes between constituents
         x, y = xy[b]
+        jlon, jlat = pts[b]
         before.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4.5" fill="#fff" '
-                      f'stroke="#111" stroke-width="1.6"/>')
+                      f'stroke="#111" stroke-width="1.6">'
+                      f'<title>join at {jlat:.5f}, {jlon:.5f}</title></circle>')
     after = [f'<path d="{svg_path(xy)}" fill="none" stroke="{ACCENT}" '
              f'stroke-width="4" stroke-linecap="round"/>']
     for x, y in (xy[0], xy[-1]):
@@ -782,9 +787,19 @@ def linfunc_chart(mr, key, width=760, h=110):
             draw(segs_after, "after: one normalized function on the merged road") +
             "</div>")
 
+def maplink(lon, lat, label):
+    return (f'<a href="https://www.openstreetmap.org/?mlat={lat:.6f}&amp;'
+            f'mlon={lon:.6f}#map=17/{lat:.6f}/{lon:.6f}" target="_blank">'
+            f'{esc(label)}: {lat:.5f}, {lon:.5f}</a>')
+
 def example_html(mr, title, note):
     gb, ga = geometry_svgs(mr)
+    pts, _ = mr_points(mr)
+    mid = pts[len(pts) // 2]
     out = [f"<section><h2>{esc(title)}</h2><p>{esc(note)}</p>",
+           "<p class='meta'>GPS: " + " · ".join((
+               maplink(*pts[0], "start"), maplink(*mid, "middle"),
+               maplink(*pts[-1], "end"))) + "</p>",
            f"<p class='meta'>{len(mr.chain)} ways, {mr.length:.0f} m, "
            f"{sum(1 for _, r, _ in mr.spans if r)} stored reversed. Ways: "
            f"{', '.join(str(w) for w, _ in mr.chain)}</p>",
