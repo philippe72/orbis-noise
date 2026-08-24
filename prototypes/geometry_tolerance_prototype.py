@@ -349,11 +349,12 @@ def _merc_px(lon, lat, z):
     return x, y
 
 
-def osm_snapshot(pa, pb, width=460, height=300):
-    """<img> of the current OSM map cropped to the same area as the SVG
-    overlay (plus padding), embedded as a base64 data URI."""
-    lons = [p[0] for p in pa + pb]
-    lats = [p[1] for p in pa + pb]
+def osm_snapshot(layers, bbox_pts, width=460, height=300):
+    """<img> of the current OSM map framed on bbox_pts (plus padding) with
+    `layers` = [(pts, rgb, line_width), ...] superimposed at their true
+    position, embedded as a base64 data URI."""
+    lons = [p[0] for p in bbox_pts]
+    lats = [p[1] for p in bbox_pts]
     lon0, lon1 = min(lons), max(lons)
     lat0, lat1 = min(lats), max(lats)
     pad_lon = max((lon1 - lon0) * 0.15, 0.0003)
@@ -384,10 +385,8 @@ def osm_snapshot(pa, pb, width=460, height=300):
                 stitched.paste(_fetch_tile(z, tx, ty), ((tx - tx0) * 256, (ty - ty0) * 256))
         crop = stitched.crop((int(x0 - tx0 * 256), int(y0 - ty0 * 256),
                               int(x0 - tx0 * 256) + width, int(y0 - ty0 * 256) + height))
-        # superimpose the merged roads at their true position (baseline blue
-        # thick, target red thin — same legend as the SVG overlay)
         draw = ImageDraw.Draw(crop)
-        for pts, color, w in ((pa, (29, 78, 216), 5), (pb, (221, 51, 51), 2)):
+        for pts, color, w in layers:
             px = [tuple(c - o for c, o in zip(_merc_px(lon, lat, z), (x0, y0)))
                   for lon, lat in pts]
             draw.line(px, fill=color, width=w, joint="curve")
@@ -400,6 +399,53 @@ def osm_snapshot(pa, pb, width=460, height=300):
         return (f'<div style="width:{width}px;height:{height}px;border:1px solid #ddd;'
                 f'display:flex;align-items:center;justify-content:center;color:#999">'
                 f'OSM tiles unavailable: {html.escape(str(e)[:80])}</div>')
+
+
+# --- connecting roads (per version): merged roads sharing an endpoint coordinate ---
+
+def endpoint_index(roads):
+    idx = collections.defaultdict(list)
+    for i, r in enumerate(roads):
+        for end in (0, -1):
+            p = r["pts"][end]
+            idx[(round(p[0], 7), round(p[1], 7))].append((i, end))
+    return idx
+
+
+ep_base = endpoint_index(base_roads)
+ep_target = endpoint_index(target_roads)
+
+NEIGHBOR_TRIM_M = 75.0
+
+def trim_from(pts, meters):
+    """First `meters` of a polyline (from pts[0]), in projected length."""
+    out = [pts[0]]
+    acc = 0.0
+    for i in range(len(pts) - 1):
+        a, b = proj(pts[i]), proj(pts[i + 1])
+        d = math.dist(a, b)
+        if acc + d >= meters:
+            t = (meters - acc) / (d or 1.0)
+            p, q = pts[i], pts[i + 1]
+            out.append((p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t))
+            return out
+        acc += d
+        out.append(pts[i + 1])
+    return out
+
+
+def neighbor_stubs(roads, idx, i):
+    """Trimmed polylines of the roads connecting to road i's endpoints,
+    each oriented away from the shared endpoint."""
+    stubs = []
+    for end in (0, -1):
+        p = roads[i]["pts"][end]
+        for j, jend in idx[(round(p[0], 7), round(p[1], 7))]:
+            if j == i:
+                continue
+            pts = roads[j]["pts"]
+            stubs.append(trim_from(pts if jend == 0 else pts[::-1], NEIGHBOR_TRIM_M))
+    return stubs
 
 
 EX_PER_BAND = 4
@@ -459,8 +505,11 @@ rows.append(hist_svg(bc_max, "max_dev distribution (count per band, log-scaled b
 rows.append(hist_svg(bc_mean, "mean_dev distribution (count per band, log-scaled bars)", "#7a9e5f"))
 
 rows.append("<h2>Examples per max_dev band</h2>"
-            "<p>Blue thick = baseline 26330, red thin = target 26340; right: current OSM map of the "
-            "same area for context. Spread across the band (smallest, ~33%, ~66%, largest). "
+            "<p>Blue thick = baseline 26330, red thin = target 26340, on the current OSM map. "
+            "Third image zooms out to show the connecting merged roads (first "
+            f"{NEIGHBOR_TRIM_M:.0f} m): light blue = baseline neighbors, orange = target "
+            "neighbors — same neighbor picture on both sides suggests unchanged topology. "
+            "Spread across the band (smallest, ~33%, ~66%, largest). "
             "Click coords to check aerial imagery.</p>")
 for label, count, picks in examples_by_band:
     if not count:
@@ -471,12 +520,21 @@ for label, count, picks in examples_by_band:
         cx = sum(p[0] for p in pa) / len(pa)
         cy = sum(p[1] for p in pa) / len(pa)
         g = sorted(base_roads[bi]["gers"])
+        nbrs_b = neighbor_stubs(base_roads, ep_base, bi)
+        nbrs_t = neighbor_stubs(target_roads, ep_target, ti)
+        pair_layers = [(pa, (29, 78, 216), 5), (pb, (221, 51, 51), 2)]
+        ctx_layers = ([(s, (125, 180, 240), 5) for s in nbrs_b]
+                      + [(s, (240, 163, 94), 2) for s in nbrs_t]
+                      + pair_layers)
+        ctx_bbox = pa + pb + [q for s in nbrs_b + nbrs_t for q in s]
         rows.append(
             "<div class='ex'><div class='side'>"
             + svg_overlay(pa, pb)
-            + osm_snapshot(pa, pb)
+            + osm_snapshot(pair_layers, pa + pb)
+            + osm_snapshot(ctx_layers, ctx_bbox)
             + f"</div><div class='cap'>max {mx:.2f} m · mean {mn:.2f} m · len {lb:.0f}→{lt:.0f} m · "
-            f"{base_roads[bi]['nways']}→{target_roads[ti]['nways']} ways<br>"
+            f"{base_roads[bi]['nways']}→{target_roads[ti]['nways']} ways · "
+            f"nbrs {len(nbrs_b)}→{len(nbrs_t)}<br>"
             f"<a href='https://www.google.com/maps/search/?api=1&query={cy:.6f},{cx:.6f}' target='_blank'>{cy:.5f}, {cx:.5f}</a>"
             f" · gers {html.escape(g[0][:16])}…({len(g)})</div></div>"
         )
@@ -487,7 +545,7 @@ page = (
     "<title>Geometry tolerance prototype (#9)</title>"
     "<style>body{font:14px/1.5 system-ui;margin:24px;max-width:1000px}"
     ".exrow{display:flex;flex-wrap:wrap;gap:18px}"
-    ".ex{width:940px}.side{display:flex;gap:12px}.side svg{width:460px;flex:none}"
+    ".ex{width:940px}.side{display:flex;flex-wrap:wrap;gap:12px}.side svg{width:460px;flex:none}"
     ".cap{font-size:12px;color:#444;margin-top:2px}"
     "code{background:#f0f0f0;padding:1px 4px;border-radius:3px}</style>"
     + "".join(rows)
