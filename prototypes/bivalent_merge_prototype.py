@@ -774,9 +774,13 @@ def linfunc_chart(mr, key, width=760, h=110):
         out.append(f'<text x="4" y="12" font-size="11" fill="#475569">{title} '
                    f'(y: {vmin}..{vmax})</text></svg>')
         return "".join(out)
-    return ('<div class="pair"><div>' + draw(segs_before, "before: raw per-way values") +
-            "</div><div>" + draw(segs_after, "after: one normalized function") +
-            "</div></div>")
+    nrev = sum(1 for _, rev, _ in mr.spans if rev)
+    # full-width, stacked, shared x-scale — side-by-side would overflow the page
+    return ("<div>" +
+            draw(segs_before, f"before: raw per-way values — {nrev}/{len(mr.spans)} "
+                 "ways stored against the merged direction, their raw values negated") +
+            draw(segs_after, "after: one normalized function on the merged road") +
+            "</div>")
 
 def example_html(mr, title, note):
     gb, ga = geometry_svgs(mr)
