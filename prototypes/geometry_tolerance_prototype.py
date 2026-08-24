@@ -385,6 +385,8 @@ def osm_snapshot(layers, bbox_pts, width=460, height=300):
                 stitched.paste(_fetch_tile(z, tx, ty), ((tx - tx0) * 256, (ty - ty0) * 256))
         crop = stitched.crop((int(x0 - tx0 * 256), int(y0 - ty0 * 256),
                               int(x0 - tx0 * 256) + width, int(y0 - ty0 * 256) + height))
+        # fade the map 50% so the superimposed roads stand out
+        crop = Image.blend(crop, Image.new("RGB", crop.size, (255, 255, 255)), 0.5)
         draw = ImageDraw.Draw(crop)
         for pts, color, w in layers:
             px = [tuple(c - o for c, o in zip(_merc_px(lon, lat, z), (x0, y0)))
@@ -506,9 +508,9 @@ rows.append(hist_svg(bc_mean, "mean_dev distribution (count per band, log-scaled
 
 rows.append("<h2>Examples per max_dev band</h2>"
             "<p>Blue thick = baseline 26330, red thin = target 26340, on the current OSM map. "
-            "Third image zooms out to show the connecting merged roads (first "
-            f"{NEIGHBOR_TRIM_M:.0f} m): light blue = baseline neighbors, orange = target "
-            "neighbors — same neighbor picture on both sides suggests unchanged topology. "
+            "Third image zooms out to include the connecting merged roads (first "
+            f"{NEIGHBOR_TRIM_M:.0f} m, same colors) — same neighbor picture on both sides "
+            "suggests unchanged topology. Map faded 50% for contrast. "
             "Spread across the band (smallest, ~33%, ~66%, largest). "
             "Click coords to check aerial imagery.</p>")
 for label, count, picks in examples_by_band:
@@ -523,8 +525,8 @@ for label, count, picks in examples_by_band:
         nbrs_b = neighbor_stubs(base_roads, ep_base, bi)
         nbrs_t = neighbor_stubs(target_roads, ep_target, ti)
         pair_layers = [(pa, (29, 78, 216), 5), (pb, (221, 51, 51), 2)]
-        ctx_layers = ([(s, (125, 180, 240), 5) for s in nbrs_b]
-                      + [(s, (240, 163, 94), 2) for s in nbrs_t]
+        ctx_layers = ([(s, (29, 78, 216), 5) for s in nbrs_b]
+                      + [(s, (221, 51, 51), 2) for s in nbrs_t]
                       + pair_layers)
         ctx_bbox = pa + pb + [q for s in nbrs_b + nbrs_t for q in s]
         rows.append(
