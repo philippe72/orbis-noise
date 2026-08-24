@@ -61,6 +61,15 @@ The union of touching polygons of one class with identical attribution, taken as
 ### Render area
 A cartographic area shape (display-layer, typically identifier-less), e.g. a parking-lot outline. Modeled as a canonical feature whose identity comes from matching rather than an identifier.
 
+### Identity-first matching
+Pairing baseline and target canonical features by their per-class stable identifiers whenever one is present on both sides; geometry-based matching covers only identifier-less classes and leftovers, using attribution solely as a tiebreak between geometric near-ties. An identifier pair whose geometries are implausibly far apart is kept but flagged.
+
+### Match group
+The unit of cross-version pairing: a connected component of baseline and target canonical features linked by shared identifiers (for merged roads, shared segment-scoped identifiers) or, in fallback, by geometric overlap. Usually 1:1; extent changes make it 1:N or N:M without special-casing. The canonical-model diff is computed per match group over its aligned extent.
+
+### Re-anchoring
+Projecting a relation's content onto the canonical features it references, as (linearly referenced) attribution. Relations are never matched as features: re-wiring a relation with identical content is noise by construction, and relation-driven diff entries land on the referenced features. Relations still appear in the ledger as element changes.
+
 ### Element change
 One row of the literal PBF diff between baseline and target: a single way, node, or relation that was created, deleted, or modified. The unit of raw churn.
 
