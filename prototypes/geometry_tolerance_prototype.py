@@ -30,7 +30,7 @@ import time
 
 import osmium
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw
 
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -384,6 +384,13 @@ def osm_snapshot(pa, pb, width=460, height=300):
                 stitched.paste(_fetch_tile(z, tx, ty), ((tx - tx0) * 256, (ty - ty0) * 256))
         crop = stitched.crop((int(x0 - tx0 * 256), int(y0 - ty0 * 256),
                               int(x0 - tx0 * 256) + width, int(y0 - ty0 * 256) + height))
+        # superimpose the merged roads at their true position (baseline blue
+        # thick, target red thin — same legend as the SVG overlay)
+        draw = ImageDraw.Draw(crop)
+        for pts, color, w in ((pa, (29, 78, 216), 5), (pb, (221, 51, 51), 2)):
+            px = [tuple(c - o for c, o in zip(_merc_px(lon, lat, z), (x0, y0)))
+                  for lon, lat in pts]
+            draw.line(px, fill=color, width=w, joint="curve")
         buf = io.BytesIO()
         crop.save(buf, "PNG", optimize=True)
         b64 = base64.b64encode(buf.getvalue()).decode("ascii")
