@@ -52,10 +52,12 @@ OUT = "prototypes/output/geometry_tolerance_report.html"
 SAMPLE_STEP_M = 2.0     # densification step along each polyline
 MAX_SAMPLES = 400       # cap per polyline (long roads)
 
-# thresholds under calibration
-T_ROUND = 0.10
-T_BULK = 5.0
-T_SHAPE = 1.5
+# thresholds — calibrated by human eyeballing (2026-08-25, Amersfoort 26330->26340).
+# T_SHAPE support is thin: the noise/real gap in the data is (1.71, 1.86) m.
+T_ROUND = 0.10   # raw union deviation below this: rounding noise
+T_BULK = 5.0     # 1:1 bulk offset above this: real bulk correction
+T_SHAPE = 1.8    # 1:1 shape residual above this: real shape change
+T_NM = 5.0       # N:M union deviation above this: real (flag for review)
 
 # ---------------- load one clip -> merged road geometries + GERS sets ----------------
 
@@ -464,7 +466,9 @@ def verdict(d):
         if d["residual"] > T_SHAPE:
             return "REAL (shape change)"
         return "noise (drift)"
-    return "N:M above rounding — eyeball"
+    if d["raw"] > T_NM:
+        return "REAL (N:M union differs — review)"
+    return "noise (N:M drift)"
 
 
 verdict_counts = collections.Counter(verdict(d) for d in records)
