@@ -649,6 +649,73 @@ def entry_html(e, open_=False):
             f"<div class=meta>{esc(elements_str(e))}</div>{body}</details>")
 
 
+# ---------------- drift-only entries: position moved, attribution identical ----------------
+# Rendered over faded OSM tiles so a human can eyeball real-vs-noise moves and
+# pick a better drift threshold than the provisional T_DRIFT_M.
+
+MAP_W, MAP_H = 420, 300
+
+
+def _merc_px(lon, lat, z):
+    n = 256 * (1 << z)
+    x = (lon + 180.0) / 360.0 * n
+    s = math.sin(math.radians(lat))
+    y = (0.5 - math.log((1 + s) / (1 - s)) / (4 * math.pi)) * n
+    return x, y
+
+
+def map_overlay(lon_a, lat_a, lon_b, lat_b, move_m):
+    lat_mid = (lat_a + lat_b) / 2
+    lon_mid = (lon_a + lon_b) / 2
+    # zoom so the two markers sit ~120 px apart, clamped to OSM's max
+    mpp_wanted = max(move_m, 0.5) / 120.0
+    mpp_equator = 156543.03392 * math.cos(math.radians(lat_mid))
+    z = min(19, max(14, int(math.log2(mpp_equator / mpp_wanted))))
+    mpp = mpp_equator / (1 << z)
+    cx, cy = _merc_px(lon_mid, lat_mid, z)
+    left, top = cx - MAP_W / 2, cy - MAP_H / 2
+    tiles = []
+    for tx in range(int(left // 256), int((left + MAP_W) // 256) + 1):
+        for ty in range(int(top // 256), int((top + MAP_H) // 256) + 1):
+            tiles.append(
+                f'<img src="https://tile.openstreetmap.org/{z}/{tx}/{ty}.png" '
+                f'style="left:{tx * 256 - left:.0f}px;top:{ty * 256 - top:.0f}px" alt="">')
+    ax, ay = _merc_px(lon_a, lat_a, z)
+    bx, by = _merc_px(lon_b, lat_b, z)
+    ax, ay, bx, by = ax - left, ay - top, bx - left, by - top
+    # scale bar: a "nice" length that maps to 40-120 px
+    bar_m = next((m for m in (0.5, 1, 2, 5, 10, 20, 50, 100) if 40 <= m / mpp <= 120),
+                 5)
+    bar_px = bar_m / mpp
+    svg = (f'<svg width="{MAP_W}" height="{MAP_H}">'
+           f'<line x1="{ax:.1f}" y1="{ay:.1f}" x2="{bx:.1f}" y2="{by:.1f}" '
+           f'stroke="#333" stroke-width="2" stroke-dasharray="4 3"/>'
+           f'<circle cx="{ax:.1f}" cy="{ay:.1f}" r="9" fill="none" stroke="#8e44ad" stroke-width="3.5"/>'
+           f'<circle cx="{bx:.1f}" cy="{by:.1f}" r="5" fill="#27ae60" stroke="#fff" stroke-width="2"/>'
+           f'<rect x="10" y="{MAP_H - 26}" width="{bar_px:.0f}" height="4" fill="#333"/>'
+           f'<text x="10" y="{MAP_H - 32}" font-size="11" fill="#333">{bar_m:g} m</text>'
+           f'</svg>')
+    return f'<div class=map style="width:{MAP_W}px;height:{MAP_H}px">{"".join(tiles)}{svg}</div>'
+
+
+def drift_entry_html(e):
+    aa, lon_a, lat_a = merge_side(e["a"])
+    ab, lon_b, lat_b = merge_side(e["b"])
+    v = e["verdict"]
+    ids = elements_str(e)
+    id_note = " · new element id" if {i for f in e["a"] for (t, i) in f.elements} != \
+                                     {i for f in e["b"] for (t, i) in f.elements} else ""
+    return (f"<div class=driftcard><div><span class='badge {v}'>{v}</span> "
+            f"<b>{e['move_m']:.2f} m</b> — {esc(group_title(e))}{id_note}"
+            f"<div class=meta>{esc(ids)}</div></div>"
+            f"{map_overlay(lon_a, lat_a, lon_b, lat_b, e['move_m'])}</div>")
+
+
+drifts = [e for e in ledger
+          if e["a"] and e["b"] and not e["attr_diff"]
+          and (e["move_m"] or 0) > T_ROUND_M]
+drifts.sort(key=lambda e: -e["move_m"])
+
 real = [e for e in ledger if e["verdict"] == "real"]
 noise = [e for e in ledger if e["verdict"] == "noise"]
 created = [e for e in ledger if e["verdict"] == "created"]
@@ -677,6 +744,16 @@ parts = [f"""<meta charset="utf-8">
  .del {{ background:#fdecea; text-decoration:line-through; }} .add {{ background:#eafaf1; }}
  .kpi {{ display:inline-block; margin:.3rem 1.2rem .3rem 0; }}
  .kpi b {{ font-size:1.5rem; display:block; }}
+ .driftcard {{ display:flex; gap:1rem; align-items:flex-start; border:1px solid #eee;
+               border-radius:6px; padding:.6rem .8rem; margin:.6rem 0; }}
+ .driftcard > div:first-child {{ flex:1; min-width:14rem; }}
+ .map {{ position:relative; overflow:hidden; border-radius:4px; flex:none; background:#f4f4f4; }}
+ .map img {{ position:absolute; width:256px; height:256px;
+             filter:saturate(.2) contrast(.75) brightness(1.3); }}
+ .map svg {{ position:absolute; left:0; top:0; }}
+ .legend span {{ display:inline-block; width:.8em; height:.8em; border-radius:50%;
+                 margin:0 .3em 0 1em; vertical-align:-.05em; border:2px solid #fff;
+                 box-shadow:0 0 1px #888; }}
 </style>
 <h1>POI canonical mini-ledger — Amersfoort 26330 → 26340 (issue #11)</h1>
 <p>Canonical POI = point + attribution. Chunked <code>key#N#</code> tags joined;
@@ -693,6 +770,15 @@ over all identifier tags (unambiguous values only), geometric fallback within
 <p class=meta>raw churn: {esc(dict(raw_counts))}<br>
 canonical features: {len(feats_a)} (26330) / {len(feats_b)} (26340); noise reasons: {esc(noise_reasons.most_common())}</p>
 """]
+
+parts.append(f"""<h2>Drift-only moves ({len(drifts)}) — position changed, attribution identical</h2>
+<p class="meta legend">Every match group whose only canonical difference is the point position
+(element id churn may ride along). Sorted by distance, so a threshold is a horizontal cut.
+Current rule: ≤ {T_DRIFT_M:g} m = drift noise, above = real.
+<span style="background:#fff;border-color:#8e44ad"></span>26330 position (ring)
+<span style="background:#27ae60"></span>26340 position (dot)
+· basemap © OpenStreetMap contributors, faded; needs internet to load tiles.</p>""")
+parts += [drift_entry_html(e) for e in drifts]
 
 parts.append(f"<h2>Real changes ({len(real)})</h2>")
 parts += [entry_html(e, open_=any(i == STATIONS_E_NODE for f in (e['a'] + e['b'])
