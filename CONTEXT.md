@@ -67,6 +67,12 @@ Pairing baseline and target canonical features by their per-class stable identif
 ### Match group
 The unit of cross-version pairing: a connected component of baseline and target canonical features linked by shared identifiers (for merged roads, shared segment-scoped identifiers) or, in fallback, by geometric overlap. Usually 1:1; extent changes make it 1:N or N:M without special-casing. The canonical-model diff is computed per match group over its aligned extent.
 
+### Deviation decomposition
+Splitting the geometry deviation between a match group's two sides into a bulk offset (best-fit translation, a corridor shift) and a shape residual (deviation left after removing the bulk, a change of drawn form), measured by symmetric max sampled point-to-polyline distance on the trimmed common extent. The length delta and extent overhang (choice-point drift) are tracked but never carry a verdict.
+
+### Geometry noise tolerance
+The tiered rule deciding whether a match group's geometry difference survives into the canonical diff. Applies only to groups whose outer topology is comparable (same external-neighbor match groups); otherwise the change-group channel owns the verdict. Tiers, with prototype-tuned configurable thresholds: union deviation ≤ 10 cm → rounding noise; bulk offset ≤ 5 m and shape residual ≤ 1.8 m (1:1), or union deviation ≤ 5 m (N:M, including extent re-partitioning) → drift noise; above → real (shape change or bulk correction). Verdicts attach to the causing editing event, never to a length delta.
+
 ### Re-anchoring
 Projecting a relation's content onto the canonical features it references, as (linearly referenced) attribution. Relations are never matched as features: re-wiring a relation with identical content is noise by construction, and relation-driven diff entries land on the referenced features. Relations still appear in the ledger as element changes.
 
