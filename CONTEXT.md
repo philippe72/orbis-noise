@@ -73,8 +73,20 @@ Splitting the geometry deviation between a match group's two sides into a bulk o
 ### Geometry noise tolerance
 The tiered rule deciding whether a match group's geometry difference survives into the canonical diff. Applies only to groups whose outer topology is comparable (same external-neighbor match groups); otherwise the change-group channel owns the verdict. Tiers, with prototype-tuned configurable thresholds: union deviation ≤ 10 cm → rounding noise; bulk offset ≤ 5 m and shape residual ≤ 1.8 m (1:1), or union deviation ≤ 5 m (N:M, including extent re-partitioning) → drift noise; above → real (shape change or bulk correction). Verdicts attach to the causing editing event, never to a length delta.
 
+### Constitutive relation
+A relation that is the storage vehicle of a canonical feature — it carries the geometry-building or grouping role for a feature with its own identity (admin boundary, multipolygon, charging station with its equipment children). Reconstructed into the feature it defines and matched like any feature (identity-first); never re-anchored.
+
+### Annotating relation
+A relation that annotates features existing independently of it (road accesses, traffic signs, right-of-way regulations, lane connectivity, turn restrictions, place membership, routes). Dissolved by re-anchoring into attribution of the referenced features; never matched as a feature.
+
 ### Re-anchoring
-Projecting a relation's content onto the canonical features it references, as (linearly referenced) attribution. Relations are never matched as features: re-wiring a relation with identical content is noise by construction, and relation-driven diff entries land on the referenced features. Relations still appear in the ledger as element changes.
+Projecting an annotating relation's content onto the canonical features it references, as attribution — a movement at a choice point, a point or interval in linear-reference space, or an access point on a destination. Relation members resolve transitively (a relation member is followed until it bottoms out in a canonical feature's identity or descriptor, never a raw element ID). Re-wiring a relation with identical content is noise by construction; relation-driven diff entries land on the referenced features, compared after matching within their match groups. Content whose members cannot be resolved (dangling refs, clipped members) stays fail-visible as flagged orphan content in the change-group channel. Relations still appear in the ledger as element changes.
+
+### Movement
+A junction-anchored maneuver: an (incoming leg, outgoing leg) pair at a choice point, each leg identified as a merged road plus which of its ends meets the junction — no offsets involved, so sectioning cannot disturb it. The canonical form for maneuver-annotating relations (lane connectivity, right-of-way regulation, turn restrictions); lane indices are normalized to the direction of travel per leg. When the anchor node is bivalent (dissolved by merging, e.g. a mid-road no_u_turn), the content becomes point-anchored linear-referenced attribution on the merged road instead.
+
+### Access point
+The canonical form of a road_access relation: attribution owned by the destination feature (address point or POI), valued (merged road, offset, side, purposes). All of one destination's access points — including additional_road_access variants — collect on that one feature; the standalone routing node that carries the projected position dissolves into the offset.
 
 ### Element change
 One row of the literal PBF diff between baseline and target: a single way, node, or relation that was created, deleted, or modified. The unit of raw churn.
