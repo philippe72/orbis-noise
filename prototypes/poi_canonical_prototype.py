@@ -30,6 +30,45 @@ Empirical corrections found while building (kept, they ARE the findings):
    storage form, area<->point) and zoomlevel_min (dropped on area->node).
    Verdict-setting candidates for docs/tag-classification.md.
 
+KNOWN DEFECT found by human review of the drift-only section (2026-08-26),
+not yet fixed in this script. Drift cases 2/3 (9.48 m) and 4/5 (8.96 m) are
+not four moves; they are two unchanged EV charging sites in which a
+charging_location node and a charging_station_location node exchanged their
+exact coordinates, while the station_location also changed which
+charging_station relation holds it. Root cause and its generalizations:
+ - Scope selection (Collector.relation) keeps a relation only if it carries a
+   POI class key. A charging_station relation carries type/station_id/
+   layer_id/license/license_zone/supported and NO class key, so all 1397 of
+   them are invisible and their member nodes fall through to 'plain POI node'
+   as top-level features. Same shape: charging_equipment (4144), building
+   (427, -> #12), landmark_building, landmark_with_label. Per CONTEXT.md these
+   are constitutive relations and their members are feature parts.
+ - Mirror failure: a heritage 'site' relation DOES carry man_made=embankment,
+   so it loads as a feature AND each of its ~50 identifier-less member ways
+   loads again as a feature. Parent and parts both become features.
+ - Per-class identity keys: station_id / evse_id / evse_uid are the identity
+   of these classes and are absent from the global ID_KEYS list, so even a
+   loaded station would match geometrically.
+ - 'No identifier' is the wrong hazard test: 195 street_cabinet, 115 mast,
+   46 siren, 38 surveillance nodes are identifier-less, in no relation, and
+   legitimately geometry-matched. Only 17 nodes (charging_station_location)
+   plus the site ways are identifier-less AND constitutive members.
+ - The fallback matcher (greedy nearest same-class within 50 m, attribution
+   only as a tiebreak) is order-dependent and arbitrary wherever siblings are
+   indistinguishable. Clip census: 236 identifier-less POI nodes sit in 89
+   same-class groups within 50 m, and most groups have identical attribution
+   (street_cabinet 37/44 groups, flagpole 5/5, all 11 fuel_pump in one group).
+   These are interchangeable feature sets and must be compared as sets, not
+   pairwise; position exchange is the two-member case. No distance tier can
+   express this verdict - do NOT raise T_DRIFT_M to absorb it.
+ - Clip-wide there are exactly 2 real position exchanges, both EV charging.
+   The other 7 candidates a naive detector flags (pier x3, soccer, artwork,
+   restaurant, school) are ordinary single-feature moves.
+ - located_in (137 resolvable) is NOT a twin variant despite label/outline
+   roles: 0/137 share a class key with their outline (outlines are buildings)
+   vs is_same at 16387/16388 same-class and 16356 sharing an identifier. It
+   is place membership -> annotating relation, to be re-anchored.
+
 Result (26330 -> 26340, run 2026-08-25): 406 raw element changes in POI scope
 -> 328 real attribution/geometry changes, +23 created, -11 deleted, 14
 noise-only groups. Chunk re-flow invisible (stations-e node 33246478484
