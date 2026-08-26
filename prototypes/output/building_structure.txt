@@ -1,0 +1,58 @@
+[26340] loaded 152387 building ways, 1066746 node locations
+
+--- osm_identifier groups with >1 footprint: 359 groups, 718 ways ---
+  group sizes: {2: 359}
+  of those groups: union is a single polygon (members touch) = 359
+                   all members attribution-identical        = 0
+  e.g. osm_identifier=263059679 ways=[4360228535, 7738577675]
+       w4360228535 gers=bf89ba07-4177-48ec-b2ec-19a24596b13e attr={'building': 'yes', 'building:levels': '1', 'height': '700'}
+       w7738577675 gers=- attr={'building:levels': '1', 'building:part': 'yes', 'height': '700', 'roof:height': '350', 'roof:levels': '1', 'roof:shape': 'gabled'}
+  e.g. osm_identifier=258543173 ways=[4363080021, 6957484121]
+       w4363080021 gers=084d06c3-2f5f-4a19-b91f-ca3943a02fc8 attr={'building': 'yes', 'building:levels': '2', 'height': '1050'}
+       w6957484121 gers=- attr={'building:levels': '2', 'building:part': 'yes', 'height': '1050', 'roof:height': '350', 'roof:levels': '1', 'roof:shape': 'gabled'}
+  e.g. osm_identifier=261665049 ways=[4368780252, 6974320155]
+       w4368780252 gers=20a98424-e8da-46c1-843d-b1399dd37c6a attr={'building': 'yes', 'building:levels': '4', 'height': '1750'}
+       w6974320155 gers=- attr={'building:levels': '4', 'building:part': 'yes', 'height': '1750', 'roof:height': '350', 'roof:levels': '1', 'roof:shape': 'gabled'}
+  e.g. osm_identifier=258542299 ways=[4370204291, 6974898243]
+       w4370204291 gers=596469a9-358f-4f11-a0ec-ca828c224a2a attr={'building': 'yes', 'building:levels': '2', 'height': '1050'}
+       w6974898243 gers=- attr={'building:levels': '2', 'building:part': 'yes', 'height': '1050', 'roof:height': '350', 'roof:levels': '1', 'roof:shape': 'gabled'}
+
+--- building_group: 303 ways in 2 distinct values ---
+  value-group sizes: {294: 1, 9: 1}
+  building_group=education -> 294 ways [4365930807, 4387311095, 4400139960, 4442897018, 4448597574, 4451449278]
+  building_group=healthcare -> 9 ways [4509874288, 4686598136, 4717957286, 4732205864, 5166900426, 5337916811]
+
+--- building:part: 646 ways; also carry building=* : 0 ---
+  w6948531451 attr={'building:levels': '2', 'building:part': 'yes', 'height': '1050', 'roof:height': '350', 'roof:levels': '1', 'roof:shape': 'gabled'}
+  w6948641332 attr={'building:levels': '2', 'building:part': 'yes', 'height': '1050', 'roof:height': '350', 'roof:levels': '1', 'roof:shape': 'gabled'}
+  w6948792383 attr={'building:levels': '2', 'building:part': 'yes', 'height': '1050', 'roof:height': '350', 'roof:levels': '1', 'roof:shape': 'hipped'}
+  building:part ways contained in a plain building footprint: 566/646
+
+--- relations carrying building / type=building / type=multipolygon ---
+  type=building: 427
+    member roles: {'part': 647, 'outline': 427}
+    member types: {'w': 1073, 'r': 1}
+    with gers_identifier: 0
+    members that are building ways: 1073/1074
+    attribution keys: {'type': 427}
+    r4823291060 tags={'type': 'building'} members=[('w', 6260059764, 'outline'), ('w', 6978649703, 'part')]
+    r4823970111 tags={'type': 'building'} members=[('w', 6319922900, 'outline'), ('w', 6955214087, 'part')]
+    r4824650055 tags={'type': 'building'} members=[('w', 6644881456, 'outline'), ('w', 6983186823, 'part')]
+  type=multipolygon: 782
+    member roles: {'inner': 1441, 'outer': 855}
+    member types: {'w': 2295, 'r': 1}
+    with gers_identifier: 69
+    members that are building ways: 0/2296
+    attribution keys: {'type': 782, 'zoomlevel_min': 634, 'landuse': 269, 'natural': 256, 'leisure': 115, 'building': 70, 'wetland': 47, 'highway': 37, 'surface': 21, 'golf': 20}
+    r876265147 tags={'landuse': 'industrial', 'type': 'multipolygon', 'zoomlevel_min': '10'} members=[('w', 1313254679, 'outer'), ('w', 1405282754, 'outer')]
+    r1360245174 tags={'natural': 'heath', 'type': 'multipolygon', 'zoomlevel_min': '10'} members=[('w', 1987375540, 'inner'), ('w', 1978750547, 'inner'), ('w', 2122499289, 'outer')]
+    r1360245175 tags={'natural': 'wood', 'type': 'multipolygon', 'zoomlevel_min': '13'} members=[('w', 1973000783, 'outer'), ('w', 1754529134, 'inner')]
+
+--- dissolve census: touching + attribution-identical ---
+  touching attribution-identical pairs: 86333
+  152387 footprints -> 70671 dissolved regions (28470 of them multi-footprint, covering 110186 footprints)
+  blob size distribution: {1: 42201, 2: 17223, 3: 2205, 4: 2274, 5: 1128, 6: 1466, 7: 748, 8: 866, 9: 495, 10: 503, 11: 285, 12: 306, 13: 214, 14: 154, 15: 106}
+  largest blob: 55 footprints
+    blob of 55: [4364506724, 4378759425, 4430068177, 4484226059, 4511300269, 4566897395, 4707979937, 4732205897, 4756435434, 4817719180]
+    blob of 50: [4361654390, 4387311048, 4398714777, 4465697872, 4472823464, 4482800826, 4945985556, 4953106639, 5057139816, 5154068369]
+    blob of 49: [4363080039, 4502749305, 4535540268, 4606793454, 4645280310, 4660952611, 4759285699, 4776378652, 4784931930, 4874719581]

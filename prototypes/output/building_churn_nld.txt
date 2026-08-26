@@ -1,0 +1,31 @@
+[base] ways=12128150 rels=117155  (379s)
+[target] ways=12133340 rels=118022  (745s)
+
+--- NLD-wide building churn 26320 -> 26340 ---
+  ways      : created=7690 deleted=2500 modified=22658
+  relations : created=891 deleted=24 modified=57
+  total building ways: base=12128150 target=12133340
+  (750s)
+[base] fetched ways=25158 rels=81  (770s)
+[target] fetched ways=30348 rels=948  (790s)
+
+--- node-ref-linked components over the changed footprints ---
+  (baseline count, target count) -> how many components
+    (1, 1) -> 16429
+    (0, 1) -> 13919
+    (1, 0) -> 8729
+  candidate split/merge components (1:N or N:M with both sides): 0
+
+--- identity on the churned footprints ---
+  deleted          n=  2500 gers=  2485 osm=  1562 parts=  114
+  created          n=  7690 gers=    15 osm=  7681 parts=  986
+  modified/base    n= 22658 gers= 20656 osm= 22653 parts= 2099
+  modified/target  n= 22658 gers= 20656 osm= 22653 parts= 2099
+  gers values on both a deleted and a created footprint (id churn): 0
+  osm_identifier values on both sides of the churn: 6
+
+--- what changed on modified footprints (node refs, not coordinates) ---
+  tags only=2012  node-refs only=20546  both=100
+  changed tag keys: {'building:levels': 1763, 'height': 1722, 'layer_id:building_group': 277, 'building_group': 277, 'min_height': 58, 'building:min_level': 54, 'layer': 11, 'license_zone': 1, 'location': 1}
+
+wrote prototypes/output/building_churn_nld.json  (792s)

@@ -1,0 +1,53 @@
+case footprints found: 12/12
+scanning 4 case bboxes for address nodes
+  [26320] 306 address nodes in the case bboxes
+  [26340] 306 address nodes in the case bboxes
+
+=== case1 SPLIT w4884694193 ===
+  https://www.openstreetmap.org/#map=19/51.707471/5.577129
+  26320 source w4884694193 area=267.8 m2 attr={'building': 'yes'}
+    addresses inside that outline in 26320: 2 -> [('Loo', '22', ''), ('Loo', '22a', '')]
+    addresses inside that outline in 26340: 2 -> [('Loo', '22', ''), ('Loo', '22a', '')]
+  26340 counterpart w7898103733 area=176.4 m2 attr={'building': 'yes'}
+    addresses inside it in 26320: 1 -> [('Loo', '22', '')]
+    addresses inside it in 26340: 1 -> [('Loo', '22', '')]
+  26340 counterpart w7899075768 area=91.3 m2 attr={'building': 'yes'}
+    addresses inside it in 26320: 1 -> [('Loo', '22a', '')]
+    addresses inside it in 26340: 1 -> [('Loo', '22a', '')]
+
+=== case2 SPLIT w6200200231 ===
+  https://www.openstreetmap.org/#map=19/52.662184/6.902492
+  26320 source w6200200231 area=305.8 m2 attr={'building': 'yes'}
+    addresses inside that outline in 26320: 2 -> [('Prinsenhofweg', '4', '')]
+    addresses inside that outline in 26340: 2 -> [('Prinsenhofweg', '4', '')]
+  26340 counterpart w7897429778 area=213.8 m2 attr={'building': 'yes'}
+    addresses inside it in 26320: 2 -> [('Prinsenhofweg', '4', '')]
+    addresses inside it in 26340: 2 -> [('Prinsenhofweg', '4', '')]
+  26340 counterpart w7894994925 area=91.9 m2 attr={'building': 'yes'}
+    addresses inside it in 26320: 0 -> []
+    addresses inside it in 26340: 0 -> []
+
+=== case3 SPLIT w7758867195 ===
+  https://www.openstreetmap.org/#map=19/51.551029/5.422004
+  26320 source w7758867195 area=39.5 m2 attr={'building': 'yes'}
+    addresses inside that outline in 26320: 0 -> []
+    addresses inside that outline in 26340: 0 -> []
+  26340 counterpart w7898452300 area=5.4 m2 attr={'building': 'yes'}
+    addresses inside it in 26320: 0 -> []
+    addresses inside it in 26340: 0 -> []
+  26340 counterpart w7896023326 area=33.3 m2 attr={'building': 'yes'}
+    addresses inside it in 26320: 0 -> []
+    addresses inside it in 26340: 0 -> []
+
+=== case4 MERGE w7896416502 ===
+  https://www.openstreetmap.org/#map=19/51.732996/5.304655
+  26340 source w7896416502 area=16.3 m2 attr={'building': 'yes'}
+    addresses inside that outline in 26320: 0 -> []
+    addresses inside that outline in 26340: 0 -> []
+  26320 counterpart w7800708716 area=9.7 m2 attr={'building': 'yes'}
+    addresses inside it in 26320: 0 -> []
+    addresses inside it in 26340: 0 -> []
+  26320 counterpart w7798292724 area=6.6 m2 attr={'building': 'yes'}
+    addresses inside it in 26320: 0 -> []
+    addresses inside it in 26340: 0 -> []
+

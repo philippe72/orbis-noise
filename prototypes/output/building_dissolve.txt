@@ -1,0 +1,50 @@
+[26340] 152387 building ways, 988431 locations, 156955 address-ish nodes
+  address-node tag keys: {'layer_id': 156955, 'license': 156955, 'license_zone': 156955, 'supported': 156955, 'addr:housenumber': 147414, 'addr:city:nl-Latn': 122303, 'addr:housenumber:nl-Latn': 122303, 'addr:postcode:nl-Latn': 122303, 'addr:street:nl-Latn': 122303, 'address_point': 122303, 'layer_id:parsed:addr:street:nl-Latn': 122298, 'parsed:addr:street:nl-Latn': 122298, 'addr:postcode': 34652, 'source_identifier:internal': 34652}
+
+dissolved regions: 70671 total, 28470 multi-footprint
+
+--- 200 largest blobs: footprints vs distinct addresses inside them ---
+  blob_size  footprints_with_own_address  distinct_addresses_in_blob
+          55                           53                          46
+          50                           38                         118
+          49                           48                          48
+          48                           44                          46
+          48                           48                          51
+          46                           41                          81
+          44                           44                          46
+          44                           44                          46
+          44                           44                          49
+          44                           44                          44
+          42                           42                          44
+          40                           36                          42
+          39                           33                          36
+          39                           38                          38
+          39                           28                          28
+          38                           36                          37
+          38                           31                          48
+          37                           22                          23
+          37                           37                          33
+          36                           36                          48
+  totals over 200 blobs: footprints=5394 with own address=4398 distinct addresses=5364
+  blobs holding more than one distinct address: 189/200
+
+--- every 37th multi-footprint blob (770 blobs) ---
+  footprints=2767 with own address=1726 distinct addresses=2212
+  blobs holding >1 distinct address: 354/770
+  blobs where distinct addresses == footprints: 237/770
+
+--- largest blob (55 footprints) in detail ---
+  union geom_type=Polygon  centroid=5.42416,52.20390
+  attribution shared by all: {'building': 'yes'}
+    w4364506724  addresses=[('', '7', '')]
+    w4378759425  addresses=[('', '60', '')]
+    w4430068177  addresses=[('', '9', '')]
+    w4484226059  addresses=[('', '26', '')]
+    w4511300269  addresses=[('', '24', '')]
+    w4566897395  addresses=[('', '4', '')]
+    w4707979937  addresses=[('', '44', '')]
+    w4732205897  addresses=[('', '34', '')]
+    w4756435434  addresses=[('', '46', '')]
+    w4817719180  addresses=[('', '38', '')]
+    w4856194489  addresses=[('', '30', '')]
+    w4978757380  addresses=[('', '13', '')]

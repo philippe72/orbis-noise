@@ -1,0 +1,45 @@
+[26320] building nodes=0 ways=152391 rels=1216
+[26330] building nodes=0 ways=152387 rels=1210
+[26340] building nodes=0 ways=152387 rels=1209
+
+--- 26330: tag keys on 152387 building ways (count, pct) ---
+   152387 100.00%  layer_id
+   152387 100.00%  license
+   152387 100.00%  license_zone
+   152387 100.00%  supported
+   151981  99.73%  gers_identifier
+   151741  99.58%  building
+   150247  98.60%  osm_identifier
+    92267  60.55%  data_size_index
+     3473   2.28%  height
+     3185   2.09%  building:levels
+      646   0.42%  building:part
+      397   0.26%  roof:shape
+      376   0.25%  roof:height
+      341   0.22%  roof:levels
+      303   0.20%  building_group
+      303   0.20%  layer_id:building_group
+      131   0.09%  layer
+       90   0.06%  min_height
+       19   0.01%  roof:direction
+        5   0.00%  roof:orientation
+        3   0.00%  location
+        2   0.00%  extrusion
+--- building / building:part values ---
+   152387  yes
+
+--- identifier coverage on 26330 building ways ---
+  gers_identifier                  present= 151981 ( 99.73%) distinct= 151981 in-dup-values=0
+  osm_identifier                   present= 150247 ( 98.60%) distinct= 149888 in-dup-values=718
+  source_identifier                present=      0 (  0.00%) distinct=      0 in-dup-values=0
+  source_identifier:internal       present=      0 (  0.00%) distinct=      0 in-dup-values=0
+  ref:bag                          present=      0 (  0.00%) distinct=      0 in-dup-values=0
+
+--- relation types among building-ish relations (26330) ---
+      783  type=multipolygon
+      427  type=building
+  of which carry a building key: 71
+
+26320->26330: created=14 deleted=24 modified=2
+26330->26340: created=1 deleted=2 modified=0
+26320->26340: created=15 deleted=26 modified=2

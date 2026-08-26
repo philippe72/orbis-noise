@@ -1,0 +1,9 @@
+{
+ "directory": "data/buildings/cases",
+ "extracts": [
+  {"output": "case1_split_w4884694193.osm.pbf", "bbox": [5.5742, 51.7055, 5.5802, 51.7095]},
+  {"output": "case2_split_w6200200231.osm.pbf", "bbox": [6.8995, 52.6602, 6.9055, 52.6642]},
+  {"output": "case3_split_w7758867195.osm.pbf", "bbox": [5.4190, 51.5490, 5.4250, 51.5530]},
+  {"output": "case4_merge_w7896416502.osm.pbf", "bbox": [5.3017, 51.7310, 5.3077, 51.7350]}
+ ]
+}

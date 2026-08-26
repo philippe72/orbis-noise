@@ -1,0 +1,153 @@
+[deleted] ways=2500 nodes=16781
+[created] ways=7690 nodes=39910
+projection latitude 52.125 (NLD-wide; scale error is <1% over the country)
+usable polygons: deleted=2500 (skipped 0) created=7690 (skipped 0)
+
+--- geometric re-partitioning over the created / deleted footprints ---
+  deleted footprints with NO overlapping created footprint : 1204/2500
+  created footprints with NO overlapping deleted footprint : 6354/7690
+  1 deleted -> 1 created, >=60% covered (re-draw)   : 730
+  1 deleted -> N created, >=60% covered (SPLIT)      : 25
+  N deleted -> 1 created, >=60% covered (MERGE)      : 27
+
+--- SPLIT cases (25), largest first ---
+  w4796332328 area=223 m2 at 4.96823,51.83382 covered 79% by 6:
+    {'building': 'yes'}
+    -> w7898334747 area=41 m2 {'building': 'yes'}
+    -> w7896106924 area=41 m2 {'building': 'yes'}
+    -> w7899631894 area=41 m2 {'building': 'yes'}
+    -> w7899896771 area=27 m2 {'building': 'yes'}
+    -> w7895847185 area=27 m2 {'building': 'yes'}
+    -> w7899543722 area=27 m2 {'building': 'yes'}
+  w7889617592 area=320 m2 at 6.86983,53.31584 covered 93% by 6:
+    {'building': 'yes'}
+    -> w7896198913 area=64 m2 {'building': 'yes'}
+    -> w7899478990 area=70 m2 {'building': 'yes'}
+    -> w7898805571 area=60 m2 {'building': 'yes'}
+    -> w7900309801 area=60 m2 {'building': 'yes'}
+    -> w7894910338 area=70 m2 {'building': 'yes'}
+    -> w7894636359 area=72 m2 {'building': 'yes'}
+  w7884479049 area=279 m2 at 6.86971,53.31548 covered 90% by 5:
+    {'building': 'yes'}
+    -> w7894962812 area=62 m2 {'building': 'yes'}
+    -> w7897050735 area=60 m2 {'building': 'yes'}
+    -> w7894826811 area=60 m2 {'building': 'yes'}
+    -> w7896725194 area=63 m2 {'building': 'yes'}
+    -> w7899981784 area=100 m2 {'building': 'yes'}
+  w7892509594 area=248 m2 at 6.86961,53.31512 covered 90% by 5:
+    {'building': 'yes'}
+    -> w7897171379 area=76 m2 {'building': 'yes'}
+    -> w7894787548 area=60 m2 {'building': 'yes'}
+    -> w7897691910 area=60 m2 {'building': 'yes'}
+    -> w7895601073 area=60 m2 {'building': 'yes'}
+    -> w7894956670 area=64 m2 {'building': 'yes'}
+  w4944569535 area=113 m2 at 6.39064,52.85529 covered 76% by 4:
+    {'building': 'yes'}
+    -> w7896896766 area=25 m2 {'building': 'yes'}
+    -> w7898479488 area=20 m2 {'building': 'yes'}
+    -> w7899573591 area=20 m2 {'building': 'yes'}
+    -> w7894938651 area=20 m2 {'building': 'yes'}
+  w4462858639 area=464 m2 at 6.51641,52.79056 covered 83% by 2:
+    {'building': 'yes'}
+    -> w7899224672 area=616 m2 {'building': 'yes'}
+    -> w7895109692 area=639 m2 {'building': 'yes'}
+  w4479948177 area=129 m2 at 5.09207,51.56391 covered 100% by 2:
+    {'building': 'yes'}
+    -> w7899217970 area=64 m2 {'building': 'yes'}
+    -> w7899946998 area=65 m2 {'building': 'yes'}
+  w4525569384 area=217 m2 at 6.38052,52.77414 covered 97% by 2:
+    {'building': 'yes'}
+    -> w7895931086 area=75 m2 {'building': 'yes'}
+    -> w7897099336 area=171 m2 {'building': 'yes'}
+  w4668083488 area=10 m2 at 6.18281,52.69877 covered 88% by 2:
+    {'building': 'yes'}
+    -> w7895966849 area=8 m2 {'building': 'yes'}
+    -> w7897442872 area=6 m2 {'building': 'yes'}
+  w4810602076 area=543 m2 at 5.75210,52.78259 covered 100% by 2:
+    {'building': 'yes'}
+    -> w7899708350 area=147 m2 {'building': 'yes'}
+    -> w7898049768 area=459 m2 {'building': 'yes'}
+  w4884694193 area=265 m2 at 5.57715,51.70748 covered 100% by 2:
+    {'building': 'yes'}
+    -> w7898103733 area=175 m2 {'building': 'yes'}
+    -> w7899075768 area=90 m2 {'building': 'yes'}
+  w4948842758 area=195 m2 at 6.42818,52.68988 covered 84% by 2:
+    {'building': 'yes'}
+    -> w7897639048 area=75 m2 {'building': 'yes'}
+    -> w7896691098 area=309 m2 {'building': 'yes'}
+
+--- MERGE cases (27), largest first ---
+  w7895374862 area=792 m2 at 4.96785,52.32510 covered 97% by 2:
+    {'building': 'yes'}
+    -> w6960712512 area=461 m2 {'building': 'yes', 'building:levels': '4', 'height': '1400'}
+    -> w6968532769 area=352 m2 {'building': 'yes', 'building:levels': '4', 'height': '1400'}
+  w7895508166 area=9 m2 at 6.86612,53.31395 covered 99% by 2:
+    {'building': 'yes'}
+    -> w6629217644 area=5 m2 {'building': 'yes'}
+    -> w6070496509 area=10 m2 {'building': 'yes'}
+  w7895518959 area=715 m2 at 5.49133,52.95658 covered 79% by 2:
+    {'building': 'yes'}
+    -> w5537455162 area=574 m2 {'building': 'yes'}
+    -> w5107023980 area=16 m2 {'building': 'yes'}
+  w7895628865 area=149 m2 at 5.33917,51.63591 covered 75% by 2:
+    {'building': 'yes'}
+    -> w4628174799 area=116 m2 {'building': 'yes'}
+    -> w4991583694 area=9 m2 {'building': 'yes'}
+  w7895656594 area=62 m2 at 6.16408,52.03533 covered 86% by 2:
+    {'building': 'yes'}
+    -> w6623512632 area=17 m2 {'building': 'yes'}
+    -> w6486688784 area=52 m2 {'building': 'yes'}
+  w7896196176 area=36 m2 at 6.16524,52.03112 covered 73% by 2:
+    {'building': 'yes'}
+    -> w5600179767 area=13 m2 {'building': 'yes'}
+    -> w4916066748 area=13 m2 {'building': 'yes'}
+  w7896202923 area=32 m2 at 6.16276,52.03357 covered 61% by 2:
+    {'building': 'yes'}
+    -> w5695677308 area=48 m2 {'building': 'yes'}
+    -> w5383531947 area=14 m2 {'building': 'yes'}
+  w7896342497 area=8 m2 at 6.38908,52.91055 covered 100% by 2:
+    {'building': 'yes'}
+    -> w7739518241 area=318 m2 {'building': 'yes'}
+    -> w7740407721 area=318 m2 {'building': 'yes'}
+  w7896416502 area=16 m2 at 5.30466,51.73300 covered 100% by 2:
+    {'building': 'yes'}
+    -> w7800708716 area=10 m2 {'building': 'yes'}
+    -> w7798292724 area=7 m2 {'building': 'yes'}
+  w7897036274 area=62 m2 at 6.16651,52.03414 covered 68% by 2:
+    {'building': 'yes'}
+    -> w6369807794 area=16 m2 {'building': 'yes'}
+    -> w5518929926 area=62 m2 {'building': 'yes'}
+  w7897375560 area=67 m2 at 6.16648,52.03473 covered 78% by 2:
+    {'building': 'yes'}
+    -> w6284302205 area=41 m2 {'building': 'yes'}
+    -> w6404024775 area=69 m2 {'building': 'yes'}
+  w7897580801 area=14 m2 at 5.49434,52.50125 covered 94% by 2:
+    {'building': 'yes'}
+    -> w5624398253 area=7 m2 {'building': 'yes'}
+    -> w4380185714 area=7 m2 {'building': 'yes'}
+
+
+--- would candidate C's rule ever fire? (union preserved AND attribution identical) ---
+  SPLIT: 25 cases; attribution-identical on every side 19/25
+    union deviation, all cases : median=3.94 m min=0.01 m max=30.65 m
+    union deviation, attribution-identical cases: median=2.30 m min=0.01 m max=21.84 m
+    candidate C rule fires (deviation <= 0.1 m AND attribution identical): 3
+  MERGE: 27 cases; attribution-identical on every side 24/27
+    union deviation, all cases : median=3.59 m min=0.01 m max=22.63 m
+    union deviation, attribution-identical cases: median=3.90 m min=0.01 m max=22.63 m
+    candidate C rule fires (deviation <= 0.1 m AND attribution identical): 1
+
+--- would identity-first matching (#7) even form these N:M groups? ---
+  SPLIT: linked by a shared identifier 4/25; best single-counterpart IoU >= 0.30 20/25
+  MERGE: linked by a shared identifier 0/27; best single-counterpart IoU >= 0.30 21/27
+
+--- sample of created footprints with no deleted counterpart (genuinely new) ---
+  w5252412689 area=52 m2 at 4.37049,52.03734 {'building:levels': '2', 'building:part': 'yes', 'height': '760', 'roof:direction': '315', 'roof:height': '315', 'roof:levels': '1', 'roof:orientation': 'along', 'roof:shape': 'skillion'}
+  w5440526498 area=52 m2 at 4.36989,52.03724 {'building:levels': '2', 'building:part': 'yes', 'height': '760', 'roof:direction': '315', 'roof:height': '315', 'roof:levels': '1', 'roof:orientation': 'along', 'roof:shape': 'skillion'}
+  w5813952736 area=41 m2 at 4.32119,52.07910 {'building:part': 'yes', 'height': '2350'}
+  w5933659333 area=52 m2 at 4.36977,52.03776 {'building:levels': '2', 'building:part': 'yes', 'height': '760', 'roof:direction': '315', 'roof:height': '315', 'roof:levels': '1', 'roof:orientation': 'along', 'roof:shape': 'skillion'}
+  w5989244062 area=27 m2 at 4.36985,52.03781 {'building:levels': '1', 'building:part': 'yes', 'height': '310', 'roof:shape': 'flat'}
+  w6012044493 area=26 m2 at 4.36997,52.03729 {'building:levels': '1', 'building:part': 'yes', 'height': '310', 'roof:shape': 'flat'}
+
+created footprint kinds: {'building:part': 986, 'building': 6704}
+deleted footprint kinds: {'building': 2386, 'building:part': 114}
