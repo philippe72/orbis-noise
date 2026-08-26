@@ -34,6 +34,13 @@ DEFECTS from human review of the drift-only section (2026-08-26), all numbers
 re-derived by prototypes/poi_review_probe.py. (1) and (2) are FIXED in this
 script; (3) to (6) are recorded and still open.
 
+INTERMEDIATE, NOT DECIDED. Nothing below is settled vocabulary or a settled
+verdict rule. 'feature part', 'interchangeable feature set' and 'position
+exchange' are PROPOSED terms only - they were deliberately NOT added to
+CONTEXT.md, because the POI structural survey has to run first (see the survey
+ticket linked from #11). Read this block as evidence to feed that survey, not
+as the answer.
+
 (1) POSITION EXCHANGE AT EV CHARGING SITES. [FIXED] Drift cases 2/3 (9.48 m) and 4/5
 (8.96 m) are not four moves. They are two unchanged charging sites where a
 charging_location node and a charging_station_location node exchanged their
@@ -43,8 +50,8 @@ charging_station relation holds it. Root cause: Collector.relation keeps a
 relation only if it carries a POI class key, and 0 of 1397 charging_station
 and 0 of 4144 charging_equipment relations carry one. All are therefore
 invisible, and their member nodes fall through to 'plain POI node' as
-top-level features. Per CONTEXT.md these are constitutive relations and their
-members are feature parts.
+top-level features. Per CONTEXT.md these are constitutive relations; their
+members are what this file calls feature parts (proposed term).
  - Fix applied: Collector now keeps charging_station relations by type, and
    load() absorbs their charging_station_location members into the
    charging_location that owns them - the part is never a feature of its own,
@@ -86,10 +93,12 @@ and crosses.
    that the flips are arguably real does NOT hold for at least 6 of them.
    2 further pier flips are single-direction (same root cause, unverified);
    the 3 sport entries are a twin being formed in the target, not a flip.
- - CONTEXT.md's Label/outline twin required an is_same relation AND a shared
-   identifier. The pier case shows a shared identifier alone is enough; the
-   glossary has been corrected, and an ambiguous identifier value must be
-   resolved by forming the twin, not by discarding the key.
+ - CONTEXT.md's Label/outline twin currently requires an is_same relation AND
+   a shared identifier. The pier case shows a shared identifier alone occurs
+   in the data. The glossary is deliberately left UNCHANGED pending the
+   structural survey; the candidate correction is that a shared identifier
+   suffices, and that an ambiguous identifier value should be resolved by
+   forming the twin rather than by discarding the key.
  - Fix applied: fold_implicit_twins() joins a label node and an outline area
    that share an identifier value with no is_same relation. It folds 80 pairs
    per map version - far more than the 3 piers. Crossed match groups go from
