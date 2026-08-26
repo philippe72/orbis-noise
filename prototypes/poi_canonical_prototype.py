@@ -30,44 +30,90 @@ Empirical corrections found while building (kept, they ARE the findings):
    storage form, area<->point) and zoomlevel_min (dropped on area->node).
    Verdict-setting candidates for docs/tag-classification.md.
 
-KNOWN DEFECT found by human review of the drift-only section (2026-08-26),
-not yet fixed in this script. Drift cases 2/3 (9.48 m) and 4/5 (8.96 m) are
-not four moves; they are two unchanged EV charging sites in which a
+KNOWN DEFECTS, from human review of the drift-only section (2026-08-26),
+all numbers re-derived by prototypes/poi_review_probe.py. Not fixed here.
+
+(1) POSITION EXCHANGE AT EV CHARGING SITES. Drift cases 2/3 (9.48 m) and 4/5
+(8.96 m) are not four moves. They are two unchanged charging sites where a
 charging_location node and a charging_station_location node exchanged their
-exact coordinates, while the station_location also changed which
-charging_station relation holds it. Root cause and its generalizations:
- - Scope selection (Collector.relation) keeps a relation only if it carries a
-   POI class key. A charging_station relation carries type/station_id/
-   layer_id/license/license_zone/supported and NO class key, so all 1397 of
-   them are invisible and their member nodes fall through to 'plain POI node'
-   as top-level features. Same shape: charging_equipment (4144), building
-   (427, -> #12), landmark_building, landmark_with_label. Per CONTEXT.md these
-   are constitutive relations and their members are feature parts.
- - Mirror failure: a heritage 'site' relation DOES carry man_made=embankment,
-   so it loads as a feature AND each of its ~50 identifier-less member ways
-   loads again as a feature. Parent and parts both become features.
- - Per-class identity keys: station_id / evse_id / evse_uid are the identity
-   of these classes and are absent from the global ID_KEYS list, so even a
-   loaded station would match geometrically.
+exact coordinates - verified exact at 1e-7 deg, with attribution identical on
+all four nodes - while the station_location also changed which
+charging_station relation holds it. Root cause: Collector.relation keeps a
+relation only if it carries a POI class key, and 0 of 1397 charging_station
+and 0 of 4144 charging_equipment relations carry one. All are therefore
+invisible, and their member nodes fall through to 'plain POI node' as
+top-level features. Per CONTEXT.md these are constitutive relations and their
+members are feature parts.
+ - Fix direction: make the charging_station the canonical feature. station_id
+   is present on 1397/1397 with 1397 distinct values - a sound identity key.
+   evse_id is NOT: present on 4117/4144 charging_equipment with only 4114
+   distinct values, so charging_equipment cannot simply be keyed on it, and
+   whether it is a feature part or a child canonical feature is still open.
+ - Mirror failure: 7 of 8 'site' relations DO carry man_made=embankment, so
+   the site loads as a feature AND its identifier-less member ways load again.
+   Parent and parts both become features.
+ - 'building' (427) is NOT this shape: all 1074 of its members are non-POI.
+   Separate question, belongs to #12.
+
+(2) CROSSED MATCH GROUPS AT UNRECOGNIZED TWINS - the larger defect, and the
+only one with observed harm beyond (1). Each of 3 man_made=pier locations
+produces a symmetric pair of false 'real' entries: n41831966118 ->
+w4159545699 ('moved 0.55 m, node<->area flip') AND w4159545699 ->
+n63229308378 ('moved 1.80 m'); likewise via w4159606647 and w4162998054.
+Every one of those ways has the same element id in both map versions, yet
+appears on the baseline side of one group and the target side of another.
+Root cause: the pier label node and outline way share one osm_identifier
+(229098047 / 229925811 / 161989043) with NO is_same relation. load() builds a
+twin only from is_same, so both elements stay separate features carrying the
+same identifier value; that value is then ambiguous on each side and is
+dropped as a link key; source_identifier:internal changes between versions
+(Aqua ID) so it cannot link either; the pair falls to the geometric fallback
+and crosses.
+ - This accounts for 6 of the 11 node<->area flip entries, so the claim below
+   that the flips are arguably real does NOT hold for at least 6 of them.
+   2 further pier flips are single-direction (same root cause, unverified);
+   the 3 sport entries are a twin being formed in the target, not a flip.
+ - CONTEXT.md's Label/outline twin required an is_same relation AND a shared
+   identifier. The pier case shows a shared identifier alone is enough; the
+   glossary has been corrected, and an ambiguous identifier value must be
+   resolved by forming the twin, not by discarding the key.
+
+(3) FALLBACK MATCHING IS GREEDY AND ORDER-DEPENDENT (see :374). Nearest
+unused same-class candidate within 50 m, attribution only as a tiebreak, so
+wherever candidates are indistinguishable the assignment is arbitrary and a
+reshuffle reads as movement. Position exchange is the two-member case. No
+distance tier can express these verdicts - do NOT raise T_DRIFT_M to absorb
+them.
+ - Exposure census (transitive closure, both map versions): 246
+   identifier-less POI nodes sit in 83 same-class components within 50 m,
+   most with identical attribution (street_cabinet 34 of 40 components,
+   flagpole 5 of 5, all 11 fuel_pump in one component). BUT only 3 of the 83
+   components contain any element change, and all 3 are
+   charging_station_location. So this is latent exposure, not observed harm:
+   once feature parts are excluded, this clip has no realized
+   interchangeable-set failure. The observed harm comes from (2), by a
+   different route - identifier ambiguity, not indistinguishable siblings.
  - 'No identifier' is the wrong hazard test: 195 street_cabinet, 115 mast,
    46 siren, 38 surveillance nodes are identifier-less, in no relation, and
-   legitimately geometry-matched. Only 17 nodes (charging_station_location)
-   plus the site ways are identifier-less AND constitutive members.
- - The fallback matcher (greedy nearest same-class within 50 m, attribution
-   only as a tiebreak) is order-dependent and arbitrary wherever siblings are
-   indistinguishable. Clip census: 236 identifier-less POI nodes sit in 89
-   same-class groups within 50 m, and most groups have identical attribution
-   (street_cabinet 37/44 groups, flagpole 5/5, all 11 fuel_pump in one group).
-   These are interchangeable feature sets and must be compared as sets, not
-   pairwise; position exchange is the two-member case. No distance tier can
-   express this verdict - do NOT raise T_DRIFT_M to absorb it.
- - Clip-wide there are exactly 2 real position exchanges, both EV charging.
-   The other 7 candidates a naive detector flags (pier x3, soccer, artwork,
-   restaurant, school) are ordinary single-feature moves.
- - located_in (137 resolvable) is NOT a twin variant despite label/outline
-   roles: 0/137 share a class key with their outline (outlines are buildings)
-   vs is_same at 16387/16388 same-class and 16356 sharing an identifier. It
-   is place membership -> annotating relation, to be re-anchored.
+   legitimately geometry-matched.
+
+(4) Clip-wide there are 2 true position exchanges, both EV charging. A naive
+multiset detector also flags a parking_space pair, but that is w7081422869
+moving 3 cm on its own and it drops out at an 11 cm tolerance: a multiset test
+cannot tell an exchange from two co-located independent moves. A correct test
+must check that identity crosses - baseline position of X equals target
+position of Y and vice versa.
+
+(5) road_access: 13 relations have an identifier-less POI node as access_to;
+10 are absent in the target, 3 unchanged, 0 with changed members. The
+interaction is deletion, not access points following the swap. No noise
+verdict is established for those 10.
+
+(6) located_in (137 resolvable) is NOT a twin variant despite its
+label/outline roles: 0 of 137 share a class key with their outline (the
+outlines are buildings), against is_same at 16387/16388 same-class and 16356
+sharing an identifier. It is place membership -> annotating relation, to be
+re-anchored.
 
 Result (26330 -> 26340, run 2026-08-25): 406 raw element changes in POI scope
 -> 328 real attribution/geometry changes, +23 created, -11 deleted, 14
