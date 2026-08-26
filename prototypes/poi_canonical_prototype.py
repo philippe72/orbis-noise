@@ -30,10 +30,11 @@ Empirical corrections found while building (kept, they ARE the findings):
    storage form, area<->point) and zoomlevel_min (dropped on area->node).
    Verdict-setting candidates for docs/tag-classification.md.
 
-KNOWN DEFECTS, from human review of the drift-only section (2026-08-26),
-all numbers re-derived by prototypes/poi_review_probe.py. Not fixed here.
+DEFECTS from human review of the drift-only section (2026-08-26), all numbers
+re-derived by prototypes/poi_review_probe.py. (1) and (2) are FIXED in this
+script; (3) to (6) are recorded and still open.
 
-(1) POSITION EXCHANGE AT EV CHARGING SITES. Drift cases 2/3 (9.48 m) and 4/5
+(1) POSITION EXCHANGE AT EV CHARGING SITES. [FIXED] Drift cases 2/3 (9.48 m) and 4/5
 (8.96 m) are not four moves. They are two unchanged charging sites where a
 charging_location node and a charging_station_location node exchanged their
 exact coordinates - verified exact at 1e-7 deg, with attribution identical on
@@ -44,19 +45,31 @@ and 0 of 4144 charging_equipment relations carry one. All are therefore
 invisible, and their member nodes fall through to 'plain POI node' as
 top-level features. Per CONTEXT.md these are constitutive relations and their
 members are feature parts.
- - Fix direction: make the charging_station the canonical feature. station_id
-   is present on 1397/1397 with 1397 distinct values - a sound identity key.
+ - Fix applied: Collector now keeps charging_station relations by type, and
+   load() absorbs their charging_station_location members into the
+   charging_location that owns them - the part is never a feature of its own,
+   and the site's point is the centroid over its parts. An exchange of
+   positions between two parts therefore leaves the centroid untouched and
+   disappears without any distance rule. The charging_location keeps carrying
+   the identity (its source_identifier is unique), so station_id was not
+   needed as a key here; note that this makes the charging_location, not the
+   charging_station, the top-level feature. That differs from the review's
+   first framing and follows the data: one charging_location carries the
+   name/address/operator and can own several charging_station relations.
+ - Still open: station_id is present on 1397/1397 with 1397 distinct values
+   and is a sound identity key if the station is ever promoted to a feature.
    evse_id is NOT: present on 4117/4144 charging_equipment with only 4114
    distinct values, so charging_equipment cannot simply be keyed on it, and
-   whether it is a feature part or a child canonical feature is still open.
- - Mirror failure: 7 of 8 'site' relations DO carry man_made=embankment, so
-   the site loads as a feature AND its identifier-less member ways load again.
-   Parent and parts both become features.
+   whether it is a feature part or a child canonical feature is still open -
+   charging_equipment members are NOT yet absorbed.
+ - Still open: 7 of 8 'site' relations DO carry man_made=embankment, so the
+   site loads as a feature AND its identifier-less member ways load again.
+   Parent and parts both become features. Not addressed.
  - 'building' (427) is NOT this shape: all 1074 of its members are non-POI.
    Separate question, belongs to #12.
 
-(2) CROSSED MATCH GROUPS AT UNRECOGNIZED TWINS - the larger defect, and the
-only one with observed harm beyond (1). Each of 3 man_made=pier locations
+(2) CROSSED MATCH GROUPS AT UNRECOGNIZED TWINS [FIXED] - the larger defect,
+and the only one with observed harm beyond (1). Each of 3 man_made=pier locations
 produces a symmetric pair of false 'real' entries: n41831966118 ->
 w4159545699 ('moved 0.55 m, node<->area flip') AND w4159545699 ->
 n63229308378 ('moved 1.80 m'); likewise via w4159606647 and w4162998054.
@@ -77,6 +90,11 @@ and crosses.
    identifier. The pier case shows a shared identifier alone is enough; the
    glossary has been corrected, and an ambiguous identifier value must be
    resolved by forming the twin, not by discarding the key.
+ - Fix applied: fold_implicit_twins() joins a label node and an outline area
+   that share an identifier value with no is_same relation. It folds 80 pairs
+   per map version - far more than the 3 piers. Crossed match groups go from
+   3 to 0, and the piers now read as noise ('identity/meta-only tag change,
+   element id churn'), which is what they are.
 
 (3) FALLBACK MATCHING IS GREEDY AND ORDER-DEPENDENT (see :374). Nearest
 unused same-class candidate within 50 m, attribution only as a tiebreak, so
@@ -115,15 +133,45 @@ outlines are buildings), against is_same at 16387/16388 same-class and 16356
 sharing an identifier. It is place membership -> annotating relation, to be
 re-anchored.
 
-Result (26330 -> 26340, run 2026-08-25): 406 raw element changes in POI scope
--> 328 real attribution/geometry changes, +23 created, -11 deleted, 14
-noise-only groups. Chunk re-flow invisible (stations-e node 33246478484
-surfaces as exactly 1 removed provider entry in each of 2 logical tags);
-twin rewiring invisible; created/deleted collapse from raw +53/-37 with no
-false floods (survivors are plausibly real: benches, recycling points,
-chargers, a school). The big real blocks are EV feed sweeps:
-payment:service_provider edits on 153 stations, charging_when_closed removed
-on 86, vehicle_access:hgv:conditional added on 41.
+Result (26330 -> 26340, run 2026-08-26, AFTER the (1)+(2) fixes). 406 raw
+element changes in POI scope -> 315 real attribution/geometry changes,
++21 created, -8 deleted, 18 noise-only groups, 19804 unchanged.
+
+                            before fix   after fix
+  canonical features        20242/20255  20145/20159
+  real                              328          315
+  created / deleted               +23/-11      +21/-8
+  noise-only groups                  14           18
+  drift-only cases                   10            5
+  node<->area flip entries           11            3
+  crossed match groups                3            0
+  implicit twins folded               0    80 per side
+
+Chunk re-flow still invisible (stations-e node 33246478484 surfaces as exactly
+1 removed provider entry in each of 2 logical tags). The big real blocks are
+still EV feed sweeps: payment:service_provider edits on 153 stations,
+charging_when_closed removed on 86, vehicle_access:hgv:conditional added on 41.
+
+What the fixes changed in the ledger:
+ - The 4 EV charging drift entries (9.48 m x2, 8.96 m x2) are gone. Each site
+   is now one match group, verdict noise, reason 'element id churn'.
+ - The previous top drift case, 66.31 m amenity=charging_location 'JustPlugIn',
+   is also gone: it was an unfolded twin, and now reads as noise. Every one of
+   the 5 largest 'drift' moves in the old ledger was an artifact.
+ - The 8 pier node<->area flips are gone; the 3 remaining flips are sport=*
+   twins being formed in the target, which is a real change, not a flip.
+ - Drift-only is now 5 cases: 5.46 m restaurant (real, same element id both
+   sides) and 4 noise at 0.33-3.70 m. So exactly one case sits above the
+   provisional 5 m threshold. The threshold is now under-evidenced rather than
+   mis-evidenced - 4 points below and 1 above is too thin to tune on, and a
+   second clip is needed before T_DRIFT_M means anything.
+ - fallback geometric matches: 4294, of which only 4 move more than 1 cm.
+   That supports (3)'s conclusion that interchangeable-set exposure is latent
+   in this clip rather than realized.
+
+Cosmetic issue left alone: the noise classifier still labels any churn of a
+relation id 'twin/outline rewiring', so the charging sites are reported with
+that reason even though the relation is a constitutive charging_station.
 
 Run:  .venv-research/Scripts/python.exe prototypes/poi_canonical_prototype.py
 Output: stdout summary + prototypes/output/poi_canonical_ledger.html
@@ -234,6 +282,8 @@ class Collector(osmium.SimpleHandler):
         self.way_refs = {}   # id -> [refs] for ALL ways (relation-member geometry)
         self.rels = {}       # id -> (tags, [(type, ref)]) — POI-class relations
         self.is_same = {}    # rel id -> (label node id, outline type, outline id, tags)
+        self.chst = {}       # id -> (tags, [(type, ref, role)]) — charging_station,
+                             # a constitutive relation carrying NO POI class key
 
     def node(self, n):
         t = dict((x.k, x.v) for x in n.tags)
@@ -256,6 +306,8 @@ class Collector(osmium.SimpleHandler):
             out = next(((m.type, m.ref) for m in r.members if m.role == "outline"), None)
             if lab is not None and out is not None:
                 self.is_same[r.id] = (lab, out[0], out[1], t)
+        elif t.get("type") == "charging_station":
+            self.chst[r.id] = (t, [(m.type, m.ref, m.role) for m in r.members])
         elif any(k in t for k in POI_KEYS):
             self.rels[r.id] = (t, [(m.type, m.ref) for m in r.members])
 
@@ -356,13 +408,37 @@ def load(clip):
 
     twin_labels = {f.fid[1] for f in feats}
 
-    # plain POI nodes (not twin labels)
+    # constitutive charging_station relations: absorb their feature parts into the
+    # charging_location that owns them, so a station_location is never a feature of
+    # its own and the site's geometry is the centroid over its parts. A position
+    # exchange between two parts then leaves the centroid untouched.
+    part_pts = collections.defaultdict(list)   # charging_location nid -> [(lon, lat)]
+    part_els = collections.defaultdict(list)   # charging_location nid -> [(type, id)]
+    part_nodes = set()                         # nodes that are feature parts
+    for rid, (rt, members) in c.chst.items():
+        locs = [ref for mt, ref, role in members
+                if mt == "n" and role == "charging_location"]
+        slocs = [ref for mt, ref, role in members
+                 if mt == "n" and role == "charging_station_location"]
+        part_nodes.update(slocs)
+        for lid in locs:
+            for sid in slocs:
+                if sid in c.nodes:
+                    part_pts[lid].append((c.nodes[sid][1], c.nodes[sid][2]))
+                    part_els[lid].append(("n", sid))
+            part_els[lid].append(("r", rid))
+
+    # plain POI nodes (not twin labels, not feature parts)
     for nid, (t, lon, lat) in c.nodes.items():
         cls = poi_class_of(t)
-        if cls is None or nid in twin_labels:
+        if cls is None or nid in twin_labels or nid in part_nodes:
             continue
+        pts = [(lon, lat)] + part_pts.get(nid, [])
+        clon = sum(p[0] for p in pts) / len(pts)
+        clat = sum(p[1] for p in pts) / len(pts)
         feats.append(Feature(("n", nid), "node", cls, canonical_attribution(t),
-                             lon, lat, [("n", nid)], identifier_values(t), t))
+                             clon, clat, [("n", nid)] + part_els.get(nid, []),
+                             identifier_values(t), t))
 
     # standalone POI areas (not twin outlines)
     for wid, (t, refs) in c.ways.items():
@@ -382,7 +458,45 @@ def load(clip):
         feats.append(Feature(("r", rid), "area", cls, canonical_attribution(t),
                              lon, lat, [("r", rid)], identifier_values(t), t))
 
+    feats = fold_implicit_twins(feats)
     return feats, c
+
+
+def fold_implicit_twins(feats):
+    """Join a label node and an outline area that share an identifier but have no
+    is_same relation (man_made=pier in the Amersfoort clip). Left unjoined, both
+    keep the same identifier value, which makes the value ambiguous, drops it as a
+    match-group link key, and lets the pair cross in the geometric fallback."""
+    by_val = collections.defaultdict(list)
+    for f in feats:
+        if f.kind == "twin":
+            continue
+        for v in f.ids:
+            by_val[v].append(f)
+    merged, absorbed = {}, set()
+    for v, fs in by_val.items():
+        if len(fs) != 2:
+            continue
+        labels = [f for f in fs if f.kind == "node"]
+        areas = [f for f in fs if f.kind == "area"]
+        if len(labels) != 1 or len(areas) != 1:
+            continue
+        lab, out = labels[0], areas[0]
+        if lab.cls != out.cls or lab.fid in absorbed or out.fid in absorbed:
+            continue
+        if out.lon is None:
+            continue
+        absorbed.add(lab.fid)
+        absorbed.add(out.fid)
+        merged[lab.fid] = Feature(("twin", lab.fid[1]), "twin", lab.cls,
+                                  lab.attribution, out.lon, out.lat,
+                                  lab.elements + out.elements,
+                                  lab.ids | out.ids, lab.raw_tags)
+    if not absorbed:
+        return feats
+    print(f"  implicit twins folded (shared identifier, no is_same): {len(merged)}",
+          flush=True)
+    return [f for f in feats if f.fid not in absorbed] + list(merged.values())
 
 
 print(f"loading baseline {CLIP_A} ...", flush=True)
@@ -530,8 +644,8 @@ def raw_element_changed(el):
     elif t == "w":
         na, nb = col_a.ways.get(i), col_b.ways.get(i)
     else:
-        na = col_a.is_same.get(i) or col_a.rels.get(i)
-        nb = col_b.is_same.get(i) or col_b.rels.get(i)
+        na = col_a.is_same.get(i) or col_a.rels.get(i) or col_a.chst.get(i)
+        nb = col_b.is_same.get(i) or col_b.rels.get(i) or col_b.chst.get(i)
     return na != nb
 
 
