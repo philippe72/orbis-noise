@@ -1,0 +1,39 @@
+[baseline] data/clips/amersfoort_26320.osm.pbf
+  {'building_ways': 152391, 'absorbed_parts': 654, 'orphan_parts': 0, 'building_relations': 428, 'multipolygon_buildings': 71, 'multipolygon_built': 71, 'features': 151808, 'locations': 992970}  (44s)
+[target]   data/clips/amersfoort_26340.osm.pbf
+  {'building_ways': 152387, 'absorbed_parts': 646, 'orphan_parts': 0, 'building_relations': 427, 'multipolygon_buildings': 71, 'multipolygon_built': 71, 'features': 151812, 'locations': 992973}  (87s)
+
+dissolve: baseline 151808 footprints -> 70370 features; target 151812 -> 70374
+
+=== candidate A dissolve ===
+  match groups: 70374
+    noise:unchanged or sub-tolerance           70368
+    real:created                               4
+    real:geometry                              2
+    REAL CHANGES TOTAL                         6
+
+=== candidate B footprint ===
+  match groups: 151812
+    noise:unchanged or sub-tolerance           151806
+    real:created                               4
+    real:geometry                              2
+    REAL CHANGES TOTAL                         6
+
+=== candidate C footprint+ ===
+  match groups: 151812
+    noise:unchanged or sub-tolerance           151806
+    real:created                               4
+    real:geometry                              2
+    REAL CHANGES TOTAL                         6
+
+=== groups where B says real and C says noise: 0 ===
+
+=== raw element churn accounting (candidate C) ===
+  raw created=14 deleted=19 modified=2
+    created: in a noise group                  10
+    created: in a real change group            4
+    deleted: in a noise group                  19
+    modified: in a real change group           2
+
+wrote prototypes/output/building_unit_amersfoort_26320_26340.json
+wrote prototypes/output/building_unit_amersfoort_26320_26340.html  (107s)

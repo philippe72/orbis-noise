@@ -1,0 +1,68 @@
+[baseline] data/buildings/deleted_26320.osm.pbf
+  {'building_ways': 2500, 'absorbed_parts': 0, 'orphan_parts': 114, 'building_relations': 0, 'multipolygon_buildings': 0, 'multipolygon_built': 0, 'features': 2500, 'locations': 16781}  (0s)
+[target]   data/buildings/created_26340.osm.pbf
+  {'building_ways': 7690, 'absorbed_parts': 0, 'orphan_parts': 986, 'building_relations': 0, 'multipolygon_buildings': 0, 'multipolygon_built': 0, 'features': 7690, 'locations': 39910}  (1s)
+
+dissolve: baseline 2500 footprints -> 2352 features; target 7690 -> 6347
+
+=== candidate A dissolve ===
+  match groups: 7482
+    noise:unchanged or sub-tolerance           259
+    real:attribution                           50
+    real:created                               5163
+    real:deleted                               1172
+    real:geometry                              718
+    real:geometry+attribution                  65
+    real:split/merge                           55
+    REAL CHANGES TOTAL                         7223
+
+=== candidate B footprint ===
+  match groups: 8864
+    noise:unchanged or sub-tolerance           267
+    real:attribution                           49
+    real:created                               6406
+    real:deleted                               1255
+    real:geometry                              740
+    real:geometry+attribution                  66
+    real:split/merge                           81
+    REAL CHANGES TOTAL                         8597
+
+=== candidate C footprint+ ===
+  match groups: 8864
+    noise:unchanged or sub-tolerance           267
+    noise:union-preserving split/merge         4
+    real:attribution                           49
+    real:created                               6406
+    real:deleted                               1255
+    real:geometry                              740
+    real:geometry+attribution                  66
+    real:split/merge                           77
+    REAL CHANGES TOTAL                         8593
+
+=== groups where B says real and C says noise: 4 ===
+    1:2 re-partitioning, union preserved to 0.007 m, attribution identical
+      baseline w4884694193          265.3 m2 at 5.577154,51.707481
+      target   w7898103733          174.8 m2 at 5.577096,51.707475
+      target   w7899075768           90.4 m2 at 5.577266,51.707492
+    1:2 re-partitioning, union preserved to 0.007 m, attribution identical
+      baseline w6200200231          309.6 m2 at 6.902469,52.662164
+      target   w7894994925           93.1 m2 at 6.902510,52.662244
+      target   w7897429778          216.4 m2 at 6.902451,52.662130
+    1:2 re-partitioning, union preserved to 0.064 m, attribution identical
+      baseline w7758867195           39.0 m2 at 5.421998,51.551033
+      target   w7896023326           32.9 m2 at 5.421990,51.551037
+      target   w7898452300            5.3 m2 at 5.422042,51.551012
+    2:1 re-partitioning, union preserved to 0.007 m, attribution identical
+      baseline w7798292724            6.5 m2 at 5.304668,51.733015
+      baseline w7800708716            9.6 m2 at 5.304652,51.732990
+      target   w7896416502           16.1 m2 at 5.304658,51.733000
+
+=== raw element churn accounting (candidate C) ===
+  raw created=7690 deleted=2500 modified=0
+    created: in a noise group                  274
+    created: in a real change group            7416
+    deleted: in a noise group                  272
+    deleted: in a real change group            2228
+
+wrote prototypes/output/building_unit_nld_churn_deleted_vs_created.json
+wrote prototypes/output/building_unit_nld_churn_deleted_vs_created.html  (4s)

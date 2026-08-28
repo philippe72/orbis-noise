@@ -57,6 +57,8 @@ OVERLAP_SHARE = 0.20     # geometric fallback: link every counterpart covering t
                          # share of the smaller of the two footprints (coverage, not
                          # best-IoU, so 1:N and N:M groups can form)
 DEG_M = 111320.0
+REALS_CAP = 20000    # how many real-change rows reach the JSON
+LEDGER_CARDS = 60    # how many map cards per candidate reach the HTML ledger
 
 
 def is_meta(k):
@@ -739,11 +741,28 @@ or an absorbed feature part. <b>Anything unaccounted for is a defect.</b></p>
 <span style="border:2.5px dashed #8e44ad"></span>baseline footprint
 <span style="background:#27ae6033;border:2px solid #27ae60"></span>target footprint
 · basemap © OpenStreetMap contributors, faded; needs internet to load tiles.</p>""")
+
+    dis = out.get("disagree", [])
+    parts.append(f"""<h2>Where candidates B and C disagree ({len(dis)})</h2>
+<p class=meta>B and C hold the same features, so these are the only groups that
+decide between them. Each one is a match group whose union is preserved within
+{T_ROUND_M:g} m and whose attribution set is identical, but whose footprint count
+changed. <b>B calls each of these a real change; C calls it noise.</b> This is the
+whole decision — read these and say which reads right.</p>""")
+    if not dis:
+        parts.append("<p class=meta>none: on this sample B and C give the same ledger.</p>")
+    parts += [entry_html(r) for r in dis]
+
     for name, c in cands.items():
+        shown = c["reals"][:LEDGER_CARDS]
+        more = c["real_total"] - len(shown)
         parts.append(f"<h2>{esc(name)} — real changes ({c['real_total']})</h2>")
-        if not c["reals"]:
+        if not shown:
             parts.append("<p class=meta>none</p>")
-        parts += [entry_html(r) for r in c["reals"]]
+        elif more > 0:
+            parts.append(f"<p class=meta>showing the first {len(shown)}; "
+                         f"{more} more are in the JSON beside this file.</p>")
+        parts += [entry_html(r) for r in shown]
 
     with open(dest, "w", encoding="utf-8") as fh:
         fh.write("\n".join(parts))
@@ -787,11 +806,32 @@ def main():
             "counts": dict(counts),
             "real_total": len(reals),
             "features": [len(FA), len(FB)],
-            "reals": [row_json(r, FA, FB, origin) for r in reals[:500]],
+            "reals": [row_json(r, FA, FB, origin) for r in reals[:REALS_CAP]],
         }
         if name.startswith("C"):
             churn_for = (rows, reals)
         print()
+
+    # B and C hold the same features, so their disagreement is exactly the set of
+    # groups whose union is preserved, whose attribution is identical, and whose
+    # footprint count changed. Those groups decide the ticket.
+    disagree = [r for r in rows_fp
+                if r.get("cardinality") and tuple(r["cardinality"]) != (1, 1)
+                and r.get("attr_same") and r.get("dev_m", 1e9) <= T_ROUND_M]
+    out["disagree"] = [row_json(dict(r, verdict="B real / C noise",
+                                     why=f"{r['cardinality'][0]}:{r['cardinality'][1]} "
+                                         f"re-partitioning, union preserved to "
+                                         f"{r['dev_m']:.3f} m, attribution identical"),
+                                A, B, origin)
+                       for r in disagree]
+    print(f"=== groups where B says real and C says noise: {len(disagree)} ===")
+    for r in out["disagree"]:
+        print(f"    {r['why']}")
+        for s in ("baseline", "target"):
+            for f in r[s]:
+                print(f"      {s:8s} {f['fid']:16s} {f['area_m2']:9.1f} m2 at "
+                      f"{f['centroid'][0]:.6f},{f['centroid'][1]:.6f}")
+    print()
 
     out["churn"] = churn_report(rawA, rawB, A, B, *churn_for)
     print("=== raw element churn accounting (candidate C) ===")
